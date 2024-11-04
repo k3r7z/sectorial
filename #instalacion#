@@ -1,5 +1,6 @@
 #! /bin/bash
 #
+
 #sudo apt update
 #
 #echo .............Instalación de Wine.............
@@ -38,4 +39,3 @@ network_name='TEST09'
 dns='10.1.4.111,10.1.4.112'
 gateway='10.7.6.200'
 nmcli connection add type ethernet ifname ${dev} con-name ${network_name} ip4 "${ip}/23" gw4 ${gateway} ipv4.dns ${dns}
-nmcli connection up TEST
