@@ -1,115 +1,135 @@
 #! /bin/bash
 
+NETWORK_NAME='Red'
+DNS='10.1.4.111,10.1.4.112'
+GATEWAY='10.7.6.200'
 PROXY="10.10.254.218"
 PROXY_PORT="3128"
-PROXY_IGNORED="['localhost', '127.0.0.0/8', '::1', '10.7.6.*', '10.7.7.*', '*.santafe.gob.ar', '*.santafe.gov.ar']"
+PROXY_IGNORED=("localhost" "127.0.0.0/8" "::1" "10.7.6.*" "10.7.7.*" "*.santafe.gob.ar" "*.santafe.gov.ar")
+PACKAGES=(
+	"x11vnc" # programa para control remoto de entornos linux
+	"samba" # protocolo para comparticion de archivos e impresoras
+	"libreoffice" # suite de herramientas
+	"ssh" # protocolo para control remoto de terminales
+	"unrar" #para rars
+	"unzip" # para zips
+	"vlc" # reproductor de audio y videos
+	"thunderbird" # correo
+	"myspell-es" # correcion en castellano para libreoffice
+	"ubuntu-restricted-extras" # algunas utilidades para ubuntu
+	"firefox-locale-es" # traducción de firefox
+	"ntp" # Protocolo para la sincronizacion del reloj
+	"hplip hplip-gui" # drivers para impresoras HP
+)
 
-sudo apt update
-echo .............Instalación de paquetes.............
-sudo apt-get install -y 
-x11vnc # control remoto para entornos linux
-samba 
-libreoffice
-ssh
-unrar #para rars
-unzip # para zips
-vlc #
-thunderbird # correo
-myspell-es # correcion en castellano para libreoffice
-ubuntu-restricted-extras # algunas utilidades para ubuntu
-firefox-locale-es
-gimp
-inkscape 
-ntp
-scribus
-scribus-doc
-hplip
-hplip-gui
-#! wine
-#! ocsinventory-agent
-#! cifs-utils
-#! net-tools # utilidades de red
-#! ethtool
-#! putty
-sudo apt-get update && sudo apt-get upgrade
+EXTRA_PACKAGES=(
+	"gimp"
+	"inkscape"
+	"scribus scribus-doc"
+)
 
-# Accesos directos
-cd /usr/share/applications/atril.desktop ~/Escritorio
-cd /usr/share/applications/gimp.desktop ~/Escritorio
-cd /usr/share/applications/
-
-echo .............Instalación de Google Chrome.............
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O chrome.deb
-sudo dpkg -i chrome.deb
-rm chrome.deb
-cp /usr/share/applications/google-chrome.desktop ~/Escritorio
+if [[ $1 == "informatica" ]]
+then
+	PACKAGES+=(
+		"wine" # interfaz para windows
+		"ocsinventory-agent" # programa para gestión de inventario
+		"cifs-utils" # utilidades para el protocolo cifs
+		"net-tools" # utilidades de red
+		"ethtool" # utilidad para controlar los drivers de red y hardware
+		"putty" # cliente de terminal ssh/telnet integrada
+	)
+fi
 
 
-echo .............Instalación de Anydesk para windows.........
-wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY | sudo apt-key add -
-# wget https://download.anydesk.com/linux/anydesk_6.3.3-1_amd64.deb -O anydesk.deb
-sudo dpkg -i anydesk.deb
-rm anydesk.deb
-cd /usr/share/applications/anydesk.desktop ~/Escritorio
+function install_common_packages(){
+	echo .............Instalación de paquetes.............
+	sudo apt update
+	sudo apt-get install $@[*]
+	
+	# Accesos directos
+	cd /usr/share/applications/atril.desktop ~/Escritorio
+	cd /usr/share/applications/gimp.desktop ~/Escritorio
+	cd /usr/share/applications/
+
+	wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O chrome.deb
+	sudo dpkg -i chrome.deb
+	rm chrome.deb
+	cp /usr/share/applications/google-chrome.desktop ~/Escritorio
+
+	wget https://download.anydesk.com/linux/anydesk_6.3.3-1_amd64.deb -O anydesk.deb
+	sudo dpkg -i anydesk.deb
+	rm anydesk.deb
+	cd /usr/share/applications/anydesk.desktop ~/Escritorio
+	
+	echo .................Crear el archivo x11vnc.service.................
+	sudo touch /lib/systemd/system/x11vnc.service
+	sudo echo [Unit] >> /lib/systemd/system/x11vnc.service
+	sudo echo Description=x11vnc service >> /lib/systemd/system/x11vnc.service
+	sudo echo After=display-manager.service network.target syslog.target >> /lib/systemd/system/x11vnc.service
+	sudo echo [Service] >> /lib/systemd/system/x11vnc.service
+	sudo echo Type=simple >> /lib/systemd/system/x11vnc.service
+	sudo echo ExecStart=/usr/bin/x11vnc -forever -display :0 -auth guess -passwd 3e2w1q >> /lib/systemd/system/x11vnc.service
+	sudo echo ExecStop=/usr/bin/killall x11vnc >> /lib/systemd/system/x11vnc.service
+	sudo echo Restart=on-failure >> /lib/systemd/system/x11vnc.service
+	sudo echo [Install] >> /lib/systemd/system/x11vnc.service
+	sudo echo WantedBy=multi-user.target >> /lib/systemd/system/x11vnc.service
+	sudo /etc/init.d/network-manager restart 
+	systemctl deamon-reload
+	systemctl enable x11vnc.service
+	systemctl start x11vnc.service
+	systemctl status x11vnc.service
+
+
+	mkdir /home/usuario/scan
+	mkdir /home/usuario/compartida
+	sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/samba/smb.conf /etc/samba/
+	sudo cp /home/administrador/Escritorio/Instalacion\ Ubuntu/samba/smb.conf /etc/samba/smb.conf
+	sudo /etc/init.d/smbd restart
+	echo .............Descativando Busqueda de Impresoras.............
+	sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
+	echo .............Ignorar Error DESKTOP O ESCRITORIO.............
+	sudo cp /home/administrador/Escritorio/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
+	sudo service cups-browsed restart
+	sudo service cups restart
+}
 
 
 
-# Agregar la red
-read -p "IP: " ip
-nmcli device
-read -p "Dispositivo: " dev
-network_name='Red'
-dns='10.1.4.111,10.1.4.112'
-gateway='10.7.6.200'
-nmcli connection add type ethernet ifname ${dev} con-name ${network_name} ip4 "${ip}/23" gw4 ${gateway} ipv4.dns ${dns}
-nmcli connection up ${network_name}
+function network_config() {
+	read -p "IP: " ip
+	nmcli device
+	read -p "Dispositivo: " dev
+	nmcli connection add type ethernet ifname $dev con-name $NETWORK_NAME ip4 "$ip/23" gw4 $GATEWAY ipv4.dns $DNS
+	nmcli connection up $NETWORK_NAME
 
-# Configuracion del proxy
-gsettings set org.gnome.system.proxy.http host ${PROXY}
-gsettings set org.gnome.system.proxy.http port ${PROXY_PORT}
-gsettings set org.gnome.system.proxy.https host ${PROXY}
-gsettings set org.gnome.system.proxy.https port ${PROXY_PORT}
-gsettings set org.gnome.system.proxy.ftp host ${PROXY}
-gsettings set org.gnome.system.proxy.ftp port ${PROXY_PORT}
-gsettings set org.gnome.system.proxy ignore-hosts ${PROXY_IGNORED}
-
-#sudo echo """Acquire::http::proxy \"http://10.7.6.6:3128\";
-#Acquire::https::proxy \"https://10.7.6.6:3128\";
-#Acquire::ftp::proxy \"ftp://10.7.6.6:3128\";
-#Acquire::socks::proxy \"socks://10.7.6.6:3128\";""" > /etc/apt/apt.conf
-sudo echo "Acquire::"{http,https,ftp}"::proxy 'http://10.7.6.6:3128'"; >> /etc/apt/apt.conf
+	# Configuracion del proxy
+	gsettings set org.gnome.system.proxy.http host ${PROXY}
+	gsettings set org.gnome.system.proxy.http port ${PROXY_PORT}
+	gsettings set org.gnome.system.proxy.https host ${PROXY}
+	gsettings set org.gnome.system.proxy.https port ${PROXY_PORT}
+	gsettings set org.gnome.system.proxy.ftp host ${PROXY}
+	gsettings set org.gnome.system.proxy.ftp port ${PROXY_PORT}
 
 
-## Tercero.sh
-echo .................Crear el archivo x11vnc.service.................
-sudo touch /lib/systemd/system/x11vnc.service
-sudo echo [Unit] >> /lib/systemd/system/x11vnc.service
-sudo echo Description=x11vnc service >> /lib/systemd/system/x11vnc.service
-sudo echo After=display-manager.service network.target syslog.target >> /lib/systemd/system/x11vnc.service
-sudo echo [Service] >> /lib/systemd/system/x11vnc.service
-sudo echo Type=simple >> /lib/systemd/system/x11vnc.service
-sudo echo ExecStart=/usr/bin/x11vnc -forever -display :0 -auth guess -passwd 3e2w1q >> /lib/systemd/system/x11vnc.service
-sudo echo ExecStop=/usr/bin/killall x11vnc >> /lib/systemd/system/x11vnc.service
-sudo echo Restart=on-failure >> /lib/systemd/system/x11vnc.service
-sudo echo [Install] >> /lib/systemd/system/x11vnc.service
-sudo echo WantedBy=multi-user.target >> /lib/systemd/system/x11vnc.service
-sudo /etc/init.d/network-manager restart 
-systemctl deamon-reload
-systemctl enable x11vnc.service
-systemctl start x11vnc.service
-systemctl status x11vnc.service
+	no_proxy=""
+	for str in ${PROXY_IGNORED[*]}
+	do
+		no_proxy+="$str,"
+	done
+	gsettings set org.gnome.system.proxy ignore-hosts $no_proxy
 
-# Cuarto.sh
-echo .............SAMBA.............
-sudo mkdir /home/usuario/scan
-sudo mkdir /home/usuario/compartida
-sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/samba/smb.conf /etc/samba/
-sudo cp /home/administrador/Escritorio/Instalacion\ Ubuntu/samba/smb.conf /etc/samba/smb.conf
-sudo /etc/init.d/smbd restart
-echo .............Descativando Busqueda de Impresoras.............
-sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
-echo .............Ignorar Error DESKTOP O ESCRITORIO.............
-sudo cp /home/administrador/Escritorio/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
-sudo service cups-browsed restart
-sudo service cups restart
-sudo reboot
+	sudo echo "Acquire::"{http,https,ftp}"::proxy 'http://10.7.6.6:3128';" >> /etc/apt/apt.conf
+}
+
+
+echo .................Instalador.................
+echo """
+1. Instalar paquetes comunes
+2. Configurar red
+3. Salir
+Opcion: """
+
+read opcion
+
+
+
