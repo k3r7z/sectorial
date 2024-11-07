@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/bash -x
 
 NETWORK_NAME='Red'
 DNS='10.1.4.111,10.1.4.112'
@@ -31,7 +31,6 @@ PACKAGES=(
 	"ethtool" # utilidad para controlar los drivers de red y hardware
 	"putty" # cliente de terminal ssh/telnet integrada
 )
-
 
 function install_common_packages(){
 	sudo apt update
@@ -108,8 +107,9 @@ function network_config() {
 
 	echo "Acquire::"{http,https,ftp}"::proxy 'http://10.7.6.6:3128';" >> apt.conf
 	sudo mv apt.conf /etc/apt
-
 }
 
 
+network_config
+install_packages
 
