@@ -1,4 +1,4 @@
-#! /bin/bash -x
+#! /bin/bash
 
 NETWORK_NAME='Red'
 DNS='10.1.4.111,10.1.4.112'
@@ -32,22 +32,46 @@ PACKAGES=(
 	"putty" # cliente de terminal ssh/telnet integrada
 )
 
-function install_common_packages(){
-	sudo apt update
-	sudo apt-get install $@[*]
+CREATE_USER_COMPLETED=false
+INSTALL_OFFICIAL_COMPLETED=false
+INSTALL_UNOFFICIAL_COMPLETED=false
+NETWORK_CONFIGURED=false
+PROXY_CONFIGURED=false
 
+
+function create_user(){
+	clear
+	echo "Configurar usuario"
+	sudo useradd -m usuario
+	sudo passwd usuario
+	CREATE_USER_COMPLETED=true
+}
+
+
+function install_unofficial_packages(){
+	clear
 	wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O chrome.deb
 	sudo dpkg -i chrome.deb
 	rm chrome.deb
+	cp /usr/share/applications/google-chrome.desktop ~/Escritorio
 
 
 	wget https://download.anydesk.com/linux/anydesk_6.3.3-1_amd64.deb -O anydesk.deb
 	sudo dpkg -i anydesk.deb
 	rm anydesk.deb
-	cd /usr/share/applications/anydesk.desktop ~/Escritorio
+	cp /usr/share/applications/anydesk.desktop ~/Escritorio
+
+	INSTALL_UNOFFICIAL_COMPLETED=true
+}
+
+function install_official_packages(){
+	clear
+
+	sudo apt update
+	sudo apt-get install "${PACKAGES[*]}"
 
 	
-	echo """[Unit]
+	echo "[Unit]
 	Description=x11vnc service
 	After=display-manager.service network.target syslog.target
 	[Service]
@@ -56,8 +80,9 @@ function install_common_packages(){
 	ExecStop=/usr/bin/killall x11vnc
 	Restart=on-failure
 	[Install]
-	WantedBy=multi-user.target""" >> x11vnc.service
+	WantedBy=multi-user.target" > x11vnc.service
 	sudo cp x11vnc.service /etc/systemd/system
+	rm x11vnc.service
 	systemctl enable x11vnc
 	systemctl start x11vnc
 
@@ -74,42 +99,98 @@ function install_common_packages(){
 	sudo service cups-browsed restart
 	sudo service cups restart
 	
-	cd /usr/share/applications/{atril,vlc,thunderbird,gimp,google-chrome}.desktop ~/Escritorio
-	cd /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop ~/Escritorio/
+	cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop ~/Escritorio
+	cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop ~/Escritorio/
 
 	sudo apt --fix-broken
 	sudo apt upgrade
+	INSTALL_OFFICIAL_COMPLETED=false
 }
 
 
-
-function network_config() {
+function configure_proxy(){
+	clear
+	echo "Configurar proxy"
 	gsettings set org.gnome.system.proxy.http host ${PROXY}
 	gsettings set org.gnome.system.proxy.http port ${PROXY_PORT}
 	gsettings set org.gnome.system.proxy.https host ${PROXY}
 	gsettings set org.gnome.system.proxy.https port ${PROXY_PORT}
 	gsettings set org.gnome.system.proxy.ftp host ${PROXY}
 	gsettings set org.gnome.system.proxy.ftp port ${PROXY_PORT}
+	echo "Proxy configurado"
+	read -r
+	PROXY_CONFIGURED=true
+}
 
-	read -p "IP: " ip
+
+function configure_network() {
+	clear
+	echo "Configurar red"
+	read -rp "IP: " ip
 	nmcli device
-	read -p "Dispositivo: " dev
-	nmcli connection add type ethernet ifname $dev con-name $NETWORK_NAME ip4 "$ip/23" gw4 $GATEWAY ipv4.dns $DNS
+	read -rp "Dispositivo: " dev
+	nmcli connection add type ethernet ifname "$dev" con-name $NETWORK_NAME ip4 "$ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
 	nmcli connection up $NETWORK_NAME
 
 
 	no_proxy=""
-	for str in ${PROXY_IGNORED[*]}
+	for str in "${PROXY_IGNORED[@]}"
 	do
 		no_proxy+="$str,"
 	done
-	gsettings set org.gnome.system.proxy ignore-hosts $no_proxy
+	gsettings set org.gnome.system.proxy ignore-hosts "$no_proxy"
 
 	echo "Acquire::"{http,https,ftp}"::proxy 'http://10.7.6.6:3128';" >> apt.conf
 	sudo mv apt.conf /etc/apt
+
+	echo "Red configurada"
+	read -r
+	NETWORK_CONFIGURED=true
 }
 
 
-network_config
-install_packages
+function print_mark(){
+	printf " ("
+	if $1
+	then
+		printf '\u2714'
+	else
+		printf '\u2A2F'
+	fi
+	printf ")\n"
+}
 
+
+
+
+while true
+do
+	clear
+	echo "Instalador"
+	printf "1. Crear usuario"
+	print_mark $CREATE_USER_COMPLETED
+
+	printf "2. Configurar red"
+	print_mark $NETWORK_CONFIGURED
+
+	printf "3. Configurar proxy"
+	print_mark $PROXY_CONFIGURED
+
+	printf "4. Instalar paquetes oficiales"
+	print_mark $INSTALL_OFFICIAL_COMPLETED
+
+	printf "5. Instalar paquetes no oficiales"
+	print_mark $INSTALL_UNOFFICIAL_COMPLETED
+
+	echo "6. Salir"
+	read -p "Opcion: " option
+
+	case $option in
+		1) create_user;;
+		2) configure_network;;
+		3) configure_proxy;;
+		4) install_official_packages;;
+		5) install_unofficial_packages;;
+		6) break;;
+	esac
+done
