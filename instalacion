@@ -1,5 +1,11 @@
 #! /bin/bash
 
+CREATE_USER_COMPLETED=false
+INSTALL_OFFICIAL_COMPLETED=false
+INSTALL_UNOFFICIAL_COMPLETED=false
+NETWORK_CONFIGURED=false
+PROXY_CONFIGURED=false
+SAMBA_INSTALLED=false
 NETWORK_NAME='Red'
 DNS='10.1.4.111,10.1.4.112'
 GATEWAY='10.7.6.200'
@@ -8,7 +14,6 @@ PROXY_PORT="3128"
 PROXY_IGNORED=("localhost" "127.0.0.0/8" "::1" "10.7.6.*" "10.7.7.*" "*.santafe.gob.ar" "*.santafe.gov.ar")
 PACKAGES=(
 	"x11vnc" # programa para control remoto de entornos linux
-	"samba" # protocolo para comparticion de archivos e impresoras
 	"libreoffice" # suite de herramientas
 	"ssh" # protocolo para control remoto de terminales
 	"unrar" #para rars
@@ -32,11 +37,6 @@ PACKAGES=(
 	"putty" # cliente de terminal ssh/telnet integrada
 )
 
-CREATE_USER_COMPLETED=false
-INSTALL_OFFICIAL_COMPLETED=false
-INSTALL_UNOFFICIAL_COMPLETED=false
-NETWORK_CONFIGURED=false
-PROXY_CONFIGURED=false
 
 
 function create_user(){
@@ -87,11 +87,6 @@ function install_official_packages(){
 	systemctl start x11vnc
 
 
-	mkdir /home/usuario/scan
-	mkdir /home/usuario/compartida
-	sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/samba/smb.conf /etc/samba/
-	sudo cp /home/administrador/Escritorio/Instalacion\ Ubuntu/samba/smb.conf /etc/samba/smb.conf
-	sudo /etc/init.d/smbd restart
 	echo .............Descativando Busqueda de Impresoras.............
 	sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
 	echo .............Ignorar Error DESKTOP O ESCRITORIO.............
@@ -149,6 +144,47 @@ function configure_network() {
 }
 
 
+function install_samba(){
+	clear
+	scan_dir=/home/usuario/scan
+	share_dir=/home/usuario/compartida
+	if [[ ! -d $scan_dir ]]
+	then
+		sudo mkdir $scan_dir
+		sudo chown usuario:usuario $scan_dir
+		sudo chmod 777 $scan_dir
+		echo "[scan]
+		path = /home/usuario/Escritorio/scan
+		public = yes
+		writable = yes
+		browseable = yes
+		read only = no
+		force directory mode = 0777
+		force create mode = 0777" | sudo tee >a /etc/samba/smb.conf > /dev/null
+	fi
+
+	if [[ ! -d $share_dir ]]
+	then
+		sudo mkdir $share_dir
+		sudo chown usuario:usuario $share_dir
+		sudo chmod 777 $share_dir
+		echo "[compartida]
+		path = /home/usuario/compartida
+		public = yes
+		writable = yes
+		browseable = yes
+		read only = no
+		force directory mode = 0777
+		force create mode = 0777" > /etc/samba/smb.conf
+	fi
+
+	sudo cp smb.conf /etc/samba/smb.conf
+	sudo systemctl restart smbd
+	read
+	SAMBA_INSTALLED=true
+}
+
+
 function print_mark(){
 	printf " ("
 	if $1
@@ -182,7 +218,10 @@ do
 	printf "5. Instalar paquetes no oficiales"
 	print_mark $INSTALL_UNOFFICIAL_COMPLETED
 
-	echo "6. Salir"
+	printf "6. Configurar Samba"
+	print_mark $SAMBA_INSTALLED
+
+	echo "7. Salir"
 	read -p "Opcion: " option
 
 	case $option in
@@ -191,6 +230,7 @@ do
 		3) configure_proxy;;
 		4) install_official_packages;;
 		5) install_unofficial_packages;;
-		6) break;;
+		6) install_samba;;
+		7) break;;
 	esac
 done
