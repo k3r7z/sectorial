@@ -1,4 +1,4 @@
-#! /bin/bash -x
+#! /bin/bash
 
 # TODO Mover x11 a otra funcion
 # TODO Mover accesos directos a otra funcion
@@ -10,6 +10,7 @@ INSTALL_PACKAGES_COMPLETED=false
 NETWORK_CONFIGURED=false
 PROXY_CONFIGURED=false
 SAMBA_CONFIGURED=false
+VNC_CONFIGURED=false
 NETWORK_NAME='Red'
 DNS='10.1.4.111,10.1.4.112'
 GATEWAY='10.7.6.200'
@@ -62,18 +63,6 @@ function install_packages(){
 	sudo apt-get install "${PACKAGES[*]}"
 
 	
-	echo "[Unit]
-	Description=x11vnc service
-	After=display-manager.service network.target syslog.target
-	[Service]
-	Type=simple
-	ExecStart=/usr/bin/x11vnc -forever -display :0 -auth guess -passwd 3e2w1q
-	ExecStop=/usr/bin/killall x11vnc
-	Restart=on-failure
-	[Install]
-	WantedBy=multi-user.target" | sudo tee /etc/systemd/system/x11vnc.service > /dev/null
-	sudo systemctl enable x11vnc
-	sudo systemctl start x11vnc
 
 
 	#echo .............Descativando Busqueda de Impresoras.............
@@ -178,6 +167,17 @@ function config_samba(){
 }
 
 
+function config_vnc(){
+	clear
+	sudo cp x11vnc.service /etc/systemd/system/
+	sudo systemctl enable x11vnc
+	sudo systemctl start x11vnc
+	systemctl status x11vnc
+	read -r
+	VNC_CONFIGURED=true
+}
+
+
 function print_mark(){
 	printf " ("
 	if $1
@@ -211,7 +211,10 @@ do
 	printf "5. Configurar Samba"
 	print_mark $SAMBA_CONFIGURED
 
-	echo "6. Salir"
+	printf "6. Configurar X11VNC"
+	print_mark $VNC_CONFIGURED
+
+	echo "7. Salir"
 	read -p "Opcion: " option
 
 	case $option in
@@ -220,6 +223,7 @@ do
 		3) configure_proxy;;
 		4) install_packages;;
 		5) config_samba;;
-		6) break;;
+		6) config_vnc;;
+		7) break;;
 	esac
 done
