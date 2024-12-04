@@ -17,6 +17,11 @@ GATEWAY='10.7.6.200'
 PROXY="10.10.254.218"
 PROXY_PORT="3128"
 PROXY_IGNORED=("localhost" "127.0.0.0/8" "::1" "10.7.6.*" "10.7.7.*" "*.santafe.gob.ar" "*.santafe.gov.ar")
+HEIGHT=13
+WIDTH=50
+CHOICE_HEIGHT=4
+MENUTITLE="Instalador/configurador"
+BACKTITLE="Instalación y configuración de Linux"
 PACKAGES=(
 	"x11vnc" # programa para control remoto de entornos linux
 	"libreoffice" # suite de herramientas
@@ -47,10 +52,33 @@ PACKAGES=(
 
 
 function create_user(){
-	clear
-	echo "Configurar usuario"
-	sudo useradd -m usuario
-	sudo passwd usuario
+  USER_TITLE="Configurar usuario"
+  user="usuario"
+  password="usuario"
+
+  if ! whiptail --title "$USER_TITLE" --backtitle "$BACKTITLE" --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"; then
+    while true; do
+      user=$(
+        whiptail \
+          --title "$USER_TITLE" \
+          --backtitle "$BACKTITLE" \
+          --inputbox "Ingresar usuario" "$HEIGHT" "$WIDTH" \
+          3>&1 1>&2 2>&3)
+
+      password=$(whiptail \
+        --title "$USER_TITLE" \
+        --backtitle "$BACKTITLE" \
+        --inputbox "Ingresar contraseña" "$HEIGHT" "$WIDTH" \
+        3>&1 1>&2 2>&3)
+
+      if whiptail --title "$USER_TITLE" --backtitle "$BACKTITLE" --yesno "Confirmar?\nUsuario: ${user}\nContraseña: ${password}" "$HEIGHT" "$WIDTH"; then
+        break
+      fi
+    done
+  fi
+
+  #sudo useradd -m "$user" -p "$password"
+  echo "$user / $password"
 	CREATE_USER_COMPLETED=true
 }
 
@@ -192,38 +220,31 @@ function print_mark(){
 
 
 
-while true
-do
-	clear
-	echo "Instalador"
-	printf "1. Crear usuario"
-	print_mark $CREATE_USER_COMPLETED
+function main_menu(){
+  OPTIONS=(\
+    1 "Crear usuario"
+    2 "Configurar red"
+    3 "Instalar paquetes"
+    4 "Salir"
+  )
 
-	printf "2. Configurar red"
-	print_mark $NETWORK_CONFIGURED
+  while true;
+  do
+    CHOICE=$(whiptail --clear \
+      --backtitle "$BACKTITLE" \
+      --title "$MENUTITLE" \
+      --menu "$MENU" \
+      "$HEIGHT" "$WIDTH" "$CHOICE_HEIGHT" \
+      "${OPTIONS[@]}" \
+      2>&1 > /dev/tty)
 
-	printf "3. Configurar proxy"
-	print_mark $PROXY_CONFIGURED
+    case "$CHOICE" in
+      1) create_user;;
+      2) echo "Configurar red";;
+      3) echo "Configurar proxy";;
+      *) break;;
+    esac
+  done
+}
 
-	printf "4. Instalar paquetes"
-	print_mark $INSTALL_PACKAGES_COMPLETED
-
-	printf "5. Configurar Samba"
-	print_mark $SAMBA_CONFIGURED
-
-	printf "6. Configurar X11VNC"
-	print_mark $VNC_CONFIGURED
-
-	echo "7. Salir"
-	read -p "Opcion: " option
-
-	case $option in
-		1) create_user;;
-		2) configure_network;;
-		3) configure_proxy;;
-		4) install_packages;;
-		5) config_samba;;
-		6) config_vnc;;
-		7) break;;
-	esac
-done
+main_menu
