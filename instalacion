@@ -8,17 +8,11 @@
 CREATE_USER_COMPLETED=false
 INSTALL_PACKAGES_COMPLETED=false
 NETWORK_CONFIGURED=false
-PROXY_CONFIGURED=false
 SAMBA_CONFIGURED=false
 VNC_CONFIGURED=false
-NETWORK_NAME='Red'
 DNS='10.1.4.111,10.1.4.112'
-GATEWAY='10.7.6.200'
-PROXY="10.10.254.218"
-PROXY_PORT="3128"
-PROXY_IGNORED=("localhost" "127.0.0.0/8" "::1" "10.7.6.*" "10.7.7.*" "*.santafe.gob.ar" "*.santafe.gov.ar")
-HEIGHT=13
-WIDTH=50
+HEIGHT=15
+WIDTH=75
 CHOICE_HEIGHT=4
 MENUTITLE="Instalador/configurador"
 BACKTITLE="Instalación y configuración de Linux"
@@ -109,9 +103,57 @@ function install_packages(){
 }
 
 
-function configure_proxy(){
-	clear
-	echo "Configurar proxy"
+function configure_network() {
+  NETWORK_TITLE="Configurar red"
+  GATEWAY='10.7.6.200'
+  PROXY="10.10.254.218"
+  PROXY_PORT="3128"
+
+
+  while true; do
+    proxy=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --radiolist "Elegir proxy" "$HEIGHT" "$WIDTH" 2 \
+      "10.10.254.218" "SCAI" ON \
+      "10.7.6.6" "Sectorial" OFF \
+      3>&2 2>&1 1>&3
+    )
+
+    ip=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar IP" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    device=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar dispositivo\n$(nmcli device)" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    network_name=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar nombre para la red" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    if whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --yesno "Confirmar?\nProxy: ${proxy}\nIP: ${ip}\nDisposito: ${device}\nNombre: ${network_name}" "$HEIGHT" "$WIDTH" ; then
+      break
+    fi
+  done
+
+
 	gsettings set org.gnome.system.proxy.http host ${PROXY}
 	gsettings set org.gnome.system.proxy.http port ${PROXY_PORT}
 	gsettings set org.gnome.system.proxy.https host ${PROXY}
@@ -119,37 +161,17 @@ function configure_proxy(){
 	gsettings set org.gnome.system.proxy.ftp host ${PROXY}
 	gsettings set org.gnome.system.proxy.ftp port ${PROXY_PORT}
 
-	no_proxy=""
-	for str in "${PROXY_IGNORED[@]}"
-	do
-		no_proxy+="$str,"
-	done
-	gsettings set org.gnome.system.proxy ignore-hosts "${no_proxy}"
-	echo "Proxy configurado"
-
 	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
 	Acquire::https::proxy \"http://10.7.6.6:3128\";
 	Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
 
-	read -r
-	PROXY_CONFIGURED=true
-}
-
-
-function configure_network() {
-	clear
-	echo "Configurar red"
-	read -rp "IP: " ip
-	nmcli device
-	read -rp "Dispositivo: " dev
-	if [[ -f "/etc/NetworkManager/system-connections/$NETWORK_NAME.nmconnection" ]]
+	if [[ -f "/etc/NetworkManager/system-connections/${network_name}.nmconnection" ]]
 	then
-		nmcli connection delete "$NETWORK_NAME"
+		nmcli connection delete "$network_name"
 	fi
-	nmcli connection add type ethernet ifname "$dev" con-name $NETWORK_NAME ip4 "$ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
-	nmcli connection up $NETWORK_NAME
-	nmcli connection
-	read -r
+	nmcli connection add type ethernet ifname "$device" con-name "$network_name" ip4 "$ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
+	nmcli connection up "$network_name"
+
 	NETWORK_CONFIGURED=true
 }
 
@@ -240,7 +262,7 @@ function main_menu(){
 
     case "$CHOICE" in
       1) create_user;;
-      2) echo "Configurar red";;
+      2) configure_network;;
       3) echo "Configurar proxy";;
       *) break;;
     esac
