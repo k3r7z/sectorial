@@ -16,32 +16,6 @@ WIDTH=75
 CHOICE_HEIGHT=4
 MENUTITLE="Instalador/configurador"
 BACKTITLE="Instalación y configuración de Linux"
-PACKAGES=(
-	"x11vnc" # programa para control remoto de entornos linux
-	"libreoffice" # suite de herramientas
-	"ssh" # protocolo para control remoto de terminales
-	"unrar" #para rars
-	"unzip" # para zips
-	"vlc" # reproductor de audio y videos
-	"thunderbird" # correo
-	"myspell-es" # correcion en castellano para libreoffice
-	"ubuntu-restricted-extras" # algunas utilidades para ubuntu
-	"firefox-locale-es" # traducción de firefox
-	"ntp" # Protocolo para la sincronizacion del reloj
-	"hplip hplip-gui" # drivers para impresoras HP
-	"vim" # editor de texto
-	"neovim" # fork de vim mejorado
-	"gimp" # editor de imagenes
-	"inkscape" # editor de imagenes vectorial
-	"google-chrome-stable" # chrome
-	"anydesk" # control remoto
-	"wine" # interfaz para windows
-	"ocsinventory-agent" # programa para gestión de inventario
-	"cifs-utils" # utilidades para el protocolo cifs
-	"net-tools" # utilidades de red
-	"ethtool" # utilidad para controlar los drivers de red y hardware
-	"putty" # cliente de terminal ssh/telnet integrada
-)
 
 
 
@@ -78,14 +52,47 @@ function create_user(){
 
 
 function install_packages(){
-	clear
+  PACKAGES_TITLE="Instalación de paquetes"
+  PACKAGES=(
+    "x11vnc" # programa para control remoto de entornos linux
+    "libreoffice" # suite de herramientas
+    "ssh" # protocolo para control remoto de terminales
+    "unrar" #para rars
+    "unzip" # para zips
+    "vlc" # reproductor de audio y videos
+    "thunderbird" # correo
+    "thunderbird-l10n-es-ar" # en castellano
+    "myspell-es" # correcion en castellano para libreoffice
+    "ubuntu-restricted-extras" # algunas utilidades para ubuntu
+    "firefox-locale-es" # traducción de firefox
+    "ntp" # Protocolo para la sincronizacion del reloj
+    "hplip hplip-gui" # drivers para impresoras HP
+    "vim" # editor de texto
+    "neovim" # fork de vim mejorado
+    "gimp" # editor de imagenes
+    "inkscape" # editor de imagenes vectorial
+    "google-chrome-stable" # chrome
+    "anydesk" # control remoto
+    "wine" # interfaz para windows
+    "ocsinventory-agent" # programa para gestión de inventario
+    "cifs-utils" # utilidades para el protocolo cifs
+    "net-tools" # utilidades de red
+    "ethtool" # utilidad para controlar los drivers de red y hardware
+    "putty" # cliente de terminal ssh/telnet integrada
+    "ubuntu-mate-desktop"
+  )
 
 	sudo apt update
-	sudo apt upgrade
-	sudo apt-get install "${PACKAGES[*]}"
+	sudo apt install "${PACKAGES[*]}"
 
-	
-
+  if whiptail\
+    --title "$PACKAGES_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
+  then
+    cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop ~/Escritorio
+    cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop ~/Escritorio/
+  fi
 
 	#echo .............Descativando Busqueda de Impresoras.............
 	#sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
@@ -93,13 +100,12 @@ function install_packages(){
 	#sudo cp /home/administrador/Escritorio/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
 	#sudo service cups-browsed restart
 	#sudo service cups restart
+  
 	
-	cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop ~/Escritorio
-	cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop ~/Escritorio/
 
 	sudo apt --fix-broken
 	sudo apt upgrade
-	INSTALL_PACKAGES_COMPLETED=false
+	INSTALL_PACKAGES_COMPLETED=true
 }
 
 
@@ -263,7 +269,7 @@ function main_menu(){
     case "$CHOICE" in
       1) create_user;;
       2) configure_network;;
-      3) echo "Configurar proxy";;
+      3) install_packages;;
       *) break;;
     esac
   done
