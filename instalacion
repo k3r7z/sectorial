@@ -18,6 +18,10 @@ MENUTITLE="Instalador/configurador"
 BACKTITLE="Instalación y configuración de Linux"
 
 
+function print_message(){
+  whiptail --title "$1" --backtitle "$BACKTITLE" --msgbox "$2" "$HEIGHT" "$WIDTH"
+}
+
 
 function create_user(){
   USER_TITLE="Configurar usuario"
@@ -82,6 +86,20 @@ function install_packages(){
     "ubuntu-mate-desktop"
   )
 
+  sudo systemctl enable cups-browsed
+  
+  if whiptail\
+    --title "$PACKAGES_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Desactivar búsqueda de las impresoras?" "$HEIGHT" "$WIDTH"
+  then
+    sudo sed -i 's/^BrowseRemoteProtocols.*/BrowseRemoteProtocols none/g' /etc/cups/cups-browsed.conf
+    sudo systemctl reload-or-restart cups-browsed
+    print_message "$PACKAGES_TITLE" "La detección se ha desactivado correctamente"
+  fi
+
+
+
 	sudo apt update
 	sudo apt install "${PACKAGES[*]}"
 
@@ -94,12 +112,6 @@ function install_packages(){
     cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop ~/Escritorio/
   fi
 
-	#echo .............Descativando Busqueda de Impresoras.............
-	#sudo cp /home/administrador/Desktop/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
-	#echo .............Ignorar Error DESKTOP O ESCRITORIO.............
-	#sudo cp /home/administrador/Escritorio/Instalacion\ Ubuntu/cups-browsed.conf /etc/cups/
-	#sudo service cups-browsed restart
-	#sudo service cups restart
   
 	
 
