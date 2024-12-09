@@ -98,6 +98,7 @@ function install_packages(){
     print_message "$PACKAGES_TITLE" "La detección se ha desactivado correctamente"
   fi
 
+  configure_vnc
 
 
 	sudo apt update
@@ -118,6 +119,12 @@ function install_packages(){
 	sudo apt --fix-broken
 	sudo apt upgrade
 	INSTALL_PACKAGES_COMPLETED=true
+}
+
+
+function configure_vnc(){
+	sudo cp x11vnc.service /etc/systemd/system/
+	sudo systemctl enable --now x11vnc
 }
 
 
@@ -235,15 +242,6 @@ function config_samba(){
 }
 
 
-function config_vnc(){
-	clear
-	sudo cp x11vnc.service /etc/systemd/system/
-	sudo systemctl enable x11vnc
-	sudo systemctl start x11vnc
-	systemctl status x11vnc
-	read -r
-	VNC_CONFIGURED=true
-}
 
 
 function print_mark(){
