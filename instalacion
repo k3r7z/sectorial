@@ -28,6 +28,9 @@ function create_user(){
   user="usuario"
   password="usuario"
 
+  if  whiptail --title "$USER_TITLE" --backtitle "$BACKTITLE" --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"; then
+
+
   if ! whiptail --title "$USER_TITLE" --backtitle "$BACKTITLE" --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"; then
     while true; do
       user=$(
@@ -86,7 +89,15 @@ function install_packages(){
     "ubuntu-mate-desktop"
   )
 
+	sudo apt update
+	sudo apt install "${PACKAGES[*]}"
+	sudo apt upgrade
+	sudo apt --fix-broken
+
   sudo systemctl enable cups-browsed
+
+  configure_vnc
+  configure_samba
   
   if whiptail\
     --title "$PACKAGES_TITLE" \
@@ -95,14 +106,8 @@ function install_packages(){
   then
     sudo sed -i 's/^BrowseRemoteProtocols.*/BrowseRemoteProtocols none/g' /etc/cups/cups-browsed.conf
     sudo systemctl reload-or-restart cups-browsed
-    print_message "$PACKAGES_TITLE" "La detección se ha desactivado correctamente"
+    print_message "$PACKAGES_TITLE" "Se ha desactivado la búsqueda de impresoras"
   fi
-
-  configure_vnc
-
-
-	sudo apt update
-	sudo apt install "${PACKAGES[*]}"
 
   if whiptail\
     --title "$PACKAGES_TITLE" \
@@ -112,12 +117,7 @@ function install_packages(){
     cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop ~/Escritorio
     cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop ~/Escritorio/
   fi
-
-  
 	
-
-	sudo apt --fix-broken
-	sudo apt upgrade
 	INSTALL_PACKAGES_COMPLETED=true
 }
 
@@ -125,6 +125,45 @@ function install_packages(){
 function configure_vnc(){
 	sudo cp x11vnc.service /etc/systemd/system/
 	sudo systemctl enable --now x11vnc
+}
+
+
+function configure_samba(){
+	scan_dir=/home/usuario/scan
+	share_dir=/home/usuario/compartida
+	if [[ ! -d $scan_dir ]]
+	then
+		sudo mkdir $scan_dir
+		sudo chown usuario:usuario $scan_dir
+		sudo chmod 777 $scan_dir
+		echo "[scan]
+		path = /home/usuario/Escritorio/scan
+		public = yes
+		writable = yes
+		browseable = yes
+		read only = no
+		force directory mode = 0777
+		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
+	fi
+
+	if [[ ! -d $share_dir ]]
+	then
+		sudo mkdir $share_dir
+		sudo chown usuario:usuario $share_dir
+		sudo chmod 777 $share_dir
+		echo "[compartida]
+		path = /home/usuario/compartida
+		public = yes
+		writable = yes
+		browseable = yes
+		read only = no
+		force directory mode = 0777
+		force create mode = 0777" > /etc/samba/smb.conf
+	fi
+
+	sudo cp smb.conf /etc/samba/smb.conf
+	sudo systemctl reload-or-restart smbd
+	SAMBA_CONFIGURED=true
 }
 
 
@@ -201,45 +240,6 @@ function configure_network() {
 }
 
 
-function config_samba(){
-	clear
-	scan_dir=/home/usuario/scan
-	share_dir=/home/usuario/compartida
-	if [[ ! -d $scan_dir ]]
-	then
-		sudo mkdir $scan_dir
-		sudo chown usuario:usuario $scan_dir
-		sudo chmod 777 $scan_dir
-		echo "[scan]
-		path = /home/usuario/Escritorio/scan
-		public = yes
-		writable = yes
-		browseable = yes
-		read only = no
-		force directory mode = 0777
-		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
-	fi
-
-	if [[ ! -d $share_dir ]]
-	then
-		sudo mkdir $share_dir
-		sudo chown usuario:usuario $share_dir
-		sudo chmod 777 $share_dir
-		echo "[compartida]
-		path = /home/usuario/compartida
-		public = yes
-		writable = yes
-		browseable = yes
-		read only = no
-		force directory mode = 0777
-		force create mode = 0777" > /etc/samba/smb.conf
-	fi
-
-	sudo cp smb.conf /etc/samba/smb.conf
-	sudo systemctl restart smbd
-	read
-	SAMBA_CONFIGURED=true
-}
 
 
 
