@@ -5,6 +5,44 @@ readonly WIDTH=75
 readonly CHOICE_HEIGHT=4
 readonly MENUTITLE="Instalador/configurador"
 readonly BACKTITLE="Instalación y configuración de Linux"
+readonly SCAN_DIR=/home/usuario/scan
+readonly SHARE_DIR=/home/usuario/compartida
+readonly NETWORK_TITLE="Configurar red"
+readonly DNS='10.1.4.111,10.1.4.112'
+readonly GATEWAY='10.7.6.200'
+readonly PROXY_PORT="3128"
+readonly APT_PROXY="10.7.6.6"
+readonly PROXY="10.10.254.218"
+readonly NETWORK_NAME="Ministerio"
+readonly APT_NETWORK_NAME="Ministerio"
+readonly PACKAGES=(
+    "x11vnc" # programa para control remoto de entornos linux
+    "libreoffice" # suite de herramientas
+    "ssh" # protocolo para control remoto de terminales
+    "unrar" #para rars
+    "unzip" # para zips
+    "vlc" # reproductor de audio y videos
+    "thunderbird" # correo
+    "thunderbird-l10n-es-ar" # en castellano
+    "myspell-es" # correcion en castellano para libreoffice
+    "ubuntu-restricted-extras" # algunas utilidades para ubuntu
+    "firefox-locale-es" # traducción de firefox
+    "ntp" # Protocolo para la sincronizacion del reloj
+    "hplip hplip-gui" # drivers para impresoras HP
+    "vim" # editor de texto
+    "neovim" # fork de vim mejorado
+    "gimp" # editor de imagenes
+    "inkscape" # editor de imagenes vectorial
+    "google-chrome-stable" # chrome
+    "anydesk-stable" # control remoto
+    "wine" # interfaz para windows
+    "ocsinventory-agent" # programa para gestión de inventario
+    "cifs-utils" # utilidades para el protocolo cifs
+    "net-tools" # utilidades de red
+    "ethtool" # utilidad para controlar los drivers de red y hardware
+    "putty" # cliente de terminal ssh/telnet integrada
+    "ubuntu-mate-desktop" # entorno mate
+)
 declare USER_NAME=usuario
 declare USER_PASSWD=usuario
 
@@ -22,6 +60,16 @@ function user_exists(){
   else 
     true
   fi
+}
+
+
+function network_exists(){
+	if [[ -f "/etc/NetworkManager/system-connections/${1}.nmconnection" ]]
+	then
+    true
+  else
+    false
+	fi
 }
 
 
@@ -79,37 +127,15 @@ function create_user(){
 
 
 function install_packages(){
-  PACKAGES_TITLE="Instalación de paquetes"
-  PACKAGES=(
-    "x11vnc" # programa para control remoto de entornos linux
-    "libreoffice" # suite de herramientas
-    "ssh" # protocolo para control remoto de terminales
-    "unrar" #para rars
-    "unzip" # para zips
-    "vlc" # reproductor de audio y videos
-    "thunderbird" # correo
-    "thunderbird-l10n-es-ar" # en castellano
-    "myspell-es" # correcion en castellano para libreoffice
-    "ubuntu-restricted-extras" # algunas utilidades para ubuntu
-    "firefox-locale-es" # traducción de firefox
-    "ntp" # Protocolo para la sincronizacion del reloj
-    "hplip hplip-gui" # drivers para impresoras HP
-    "vim" # editor de texto
-    "neovim" # fork de vim mejorado
-    "gimp" # editor de imagenes
-    "inkscape" # editor de imagenes vectorial
-    "google-chrome-stable" # chrome
-    "anydesk-stable" # control remoto
-    "wine" # interfaz para windows
-    "ocsinventory-agent" # programa para gestión de inventario
-    "cifs-utils" # utilidades para el protocolo cifs
-    "net-tools" # utilidades de red
-    "ethtool" # utilidad para controlar los drivers de red y hardware
-    "putty" # cliente de terminal ssh/telnet integrada
-    "ubuntu-mate-desktop" # entorno mate
-  )
+  readonly PACKAGES_TITLE="Instalación de paquetes"
 
-  print_message "$PACKAGES_TITLE" "Asegurate de haber configurado la red y tener conexión antes de continuar"
+  if ! network_exists "$APT_NETWORK_NAME"
+  then
+    print_message "$PACKAGES_TITLE" "La red para instalar los paquetes no está configurada. Configurala en la sección de configurar red en el menú principal."
+    return
+  else
+    nmcli connection up "$APT_NETWORK_NAME"
+  fi
 
   sudo wget -q -O - https://dl.google.com/linux/linux_signing_key.pub |
     sudo apt-key add -
@@ -159,8 +185,6 @@ function configure_vnc(){
 
 
 function configure_samba(){
-	readonly SCAN_DIR=/home/usuario/scan
-	readonly SHARE_DIR=/home/usuario/compartida
 	if [[ ! -d $SCAN_DIR ]]
 	then
 		sudo mkdir $SCAN_DIR
@@ -197,15 +221,6 @@ function configure_samba(){
 
 
 function configure_network() {
-  readonly NETWORK_TITLE="Configurar red"
-  readonly DNS='10.1.4.111,10.1.4.112'
-  readonly GATEWAY='10.7.6.200'
-  readonly PROXY_PORT="3128"
-  readonly APT_PROXY="10.7.6.6"
-  readonly PROXY="10.10.254.218"
-  readonly NETWORK_NAME="Ministerio"
-  readonly APT_NETWORK_NAME="Ministerio"
-
   print_message "$NETWORK_TITLE" "Asegurate de tener el cable de red conectado antes de continuar"
 
   while true; do
@@ -255,13 +270,13 @@ function configure_network() {
 Acquire::https::proxy \"http://10.7.6.6:3128\";
 Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
 
-	if [[ -f "/etc/NetworkManager/system-connections/$APT_NETWORK_NAME.nmconnection" ]]
+	if network_exists $APT_NETWORK_NAME
 	then
 		nmcli connection delete "$APT_NETWORK_NAME"
 	fi
 	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
 
-	if [[ -f "/etc/NetworkManager/system-connections/$NETWORK_NAME.nmconnection" ]]
+	if network_exists $NETWORK_NAME
 	then
 		nmcli connection delete "$NETWORK_NAME"
 	fi
