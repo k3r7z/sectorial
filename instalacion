@@ -73,6 +73,16 @@ function network_exists(){
 }
 
 
+function check_connectivity(){
+  if [[ $(nmcli networking connectivity check) == "full" ]]
+  then
+    true
+  else
+    false
+  fi
+}
+
+
 function create_user(){
   USER_TITLE="Configurar usuario"
 
@@ -128,6 +138,12 @@ function create_user(){
 
 function install_packages(){
   readonly PACKAGES_TITLE="Instalación de paquetes"
+
+  if ! check_connectivity
+  then
+    print_message "$PACKAGES_TITLE" "No hay conexión a internet. Puede ser porque el cable de red está desconectado o el NetworkManager está desactivado"
+    return
+  fi
 
   if ! network_exists "$APT_NETWORK_NAME"
   then
