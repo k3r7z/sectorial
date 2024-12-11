@@ -1,21 +1,12 @@
 #! /bin/bash
 
-# TODO Mover x11 a otra funcion
-# TODO Mover accesos directos a otra funcion
-# TODO Modificar la red "Red" si ya existe, sino crearla
-# TODO ver configuracion del cups 
-
-CREATE_USER_COMPLETED=false
-INSTALL_PACKAGES_COMPLETED=false
-NETWORK_CONFIGURED=false
-SAMBA_CONFIGURED=false
-VNC_CONFIGURED=false
-DNS='10.1.4.111,10.1.4.112'
-HEIGHT=15
-WIDTH=75
-CHOICE_HEIGHT=4
-MENUTITLE="Instalador/configurador"
-BACKTITLE="Instalación y configuración de Linux"
+readonly HEIGHT=15
+readonly WIDTH=75
+readonly CHOICE_HEIGHT=4
+readonly MENUTITLE="Instalador/configurador"
+readonly BACKTITLE="Instalación y configuración de Linux"
+declare USER_NAME=usuario
+declare USER_PASSWD=usuario
 
 
 function print_message(){
@@ -23,38 +14,67 @@ function print_message(){
 }
 
 
+function user_exists(){
+  exists=$(grep "${USER_NAME}" /etc/passwd)
+  if [[ -z $exists ]]
+  then
+    false
+  else 
+    true
+  fi
+}
+
+
 function create_user(){
   USER_TITLE="Configurar usuario"
-  user="usuario"
-  password="usuario"
 
-  if  whiptail --title "$USER_TITLE" --backtitle "$BACKTITLE" --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"; then
+  if ! whiptail \
+    --title "$USER_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"
+  then
+    if [[ $user_exists ]]
+    then
+      if whiptail \
+        --title "$USER_TITLE" \
+        --backtitle "$BACKTITLE" \
+        --yesno "El usuario $USER_NAME ya existe. Eliminar y crear uno nuevo?" \
+        "$HEIGHT" "$WIDTH"
+      then
+        userdel -r "$USER_NAME"
+        print_message "Se eliminó el usuario"
+      else
+        return
+      fi
+    fi
 
-
-  if ! whiptail --title "$USER_TITLE" --backtitle "$BACKTITLE" --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"; then
-    while true; do
-      user=$(
+    while true
+    do
+      USER_NAME=$(
         whiptail \
           --title "$USER_TITLE" \
           --backtitle "$BACKTITLE" \
           --inputbox "Ingresar usuario" "$HEIGHT" "$WIDTH" \
           3>&1 1>&2 2>&3)
 
-      password=$(whiptail \
+      USER_PASSWD=$(whiptail \
         --title "$USER_TITLE" \
         --backtitle "$BACKTITLE" \
         --inputbox "Ingresar contraseña" "$HEIGHT" "$WIDTH" \
         3>&1 1>&2 2>&3)
 
-      if whiptail --title "$USER_TITLE" --backtitle "$BACKTITLE" --yesno "Confirmar?\nUsuario: ${user}\nContraseña: ${password}" "$HEIGHT" "$WIDTH"; then
+      if whiptail \
+        --title "$USER_TITLE" \
+        --backtitle "$BACKTITLE" \
+        --yesno "Confirmar?\nUsuario: ${USER_NAME}\nContraseña: ${USER_PASSWD}" \
+        "$HEIGHT" "$WIDTH"
+      then
+        sudo useradd -m "$USER_NAME" -p "$USER_PASSWD"
         break
       fi
     done
   fi
 
-  #sudo useradd -m "$user" -p "$password"
-  echo "$user / $password"
-	CREATE_USER_COMPLETED=true
 }
 
 
@@ -79,19 +99,31 @@ function install_packages(){
     "gimp" # editor de imagenes
     "inkscape" # editor de imagenes vectorial
     "google-chrome-stable" # chrome
-    "anydesk" # control remoto
+    "anydesk-stable" # control remoto
     "wine" # interfaz para windows
     "ocsinventory-agent" # programa para gestión de inventario
     "cifs-utils" # utilidades para el protocolo cifs
     "net-tools" # utilidades de red
     "ethtool" # utilidad para controlar los drivers de red y hardware
     "putty" # cliente de terminal ssh/telnet integrada
-    "ubuntu-mate-desktop"
+    "ubuntu-mate-desktop" # entorno mate
   )
+
+  print_message "$PACKAGES_TITLE" "Asegurate de haber configurado la red y tener conexión antes de continuar"
+
+  sudo wget -q -O - https://dl.google.com/linux/linux_signing_key.pub |
+    sudo apt-key add -
+  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" |
+    sudo tee /etc/apt/sources.list.d/google-chrome.list
+
+  wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY |
+    sudo apt-key add -
+  echo "deb http://deb.anydesk.com/ all main" |
+    sudo tee /etc/apt/sources.list.d/anydesk-stable.list
+
 
 	sudo apt update
 	sudo apt install "${PACKAGES[*]}"
-	sudo apt upgrade
 	sudo apt --fix-broken
 
   sudo systemctl enable cups-browsed
@@ -114,11 +146,9 @@ function install_packages(){
     --backtitle "$BACKTITLE" \
     --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
   then
-    cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop ~/Escritorio
-    cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop ~/Escritorio/
+    cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$USER_NAME"/Escritorio
+    cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$USER_NAME"/Escritorio/
   fi
-	
-	INSTALL_PACKAGES_COMPLETED=true
 }
 
 
@@ -129,13 +159,13 @@ function configure_vnc(){
 
 
 function configure_samba(){
-	scan_dir=/home/usuario/scan
-	share_dir=/home/usuario/compartida
-	if [[ ! -d $scan_dir ]]
+	readonly SCAN_DIR=/home/usuario/scan
+	readonly SHARE_DIR=/home/usuario/compartida
+	if [[ ! -d $SCAN_DIR ]]
 	then
-		sudo mkdir $scan_dir
-		sudo chown usuario:usuario $scan_dir
-		sudo chmod 777 $scan_dir
+		sudo mkdir $SCAN_DIR
+		sudo chown usuario:usuario $SCAN_DIR
+		sudo chmod 777 $SCAN_DIR
 		echo "[scan]
 		path = /home/usuario/Escritorio/scan
 		public = yes
@@ -146,11 +176,11 @@ function configure_samba(){
 		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
 	fi
 
-	if [[ ! -d $share_dir ]]
+	if [[ ! -d $SHARE_DIR ]]
 	then
-		sudo mkdir $share_dir
-		sudo chown usuario:usuario $share_dir
-		sudo chmod 777 $share_dir
+		sudo mkdir $SHARE_DIR
+		sudo chown usuario:usuario $SHARE_DIR
+		sudo chmod 777 $SHARE_DIR
 		echo "[compartida]
 		path = /home/usuario/compartida
 		public = yes
@@ -163,33 +193,35 @@ function configure_samba(){
 
 	sudo cp smb.conf /etc/samba/smb.conf
 	sudo systemctl reload-or-restart smbd
-	SAMBA_CONFIGURED=true
 }
 
 
 function configure_network() {
-  NETWORK_TITLE="Configurar red"
-  GATEWAY='10.7.6.200'
-  PROXY="10.10.254.218"
-  PROXY_PORT="3128"
+  readonly NETWORK_TITLE="Configurar red"
+  readonly DNS='10.1.4.111,10.1.4.112'
+  readonly GATEWAY='10.7.6.200'
+  readonly PROXY_PORT="3128"
+  readonly APT_PROXY="10.7.6.6"
+  readonly PROXY="10.10.254.218"
+  readonly NETWORK_NAME="Ministerio"
+  readonly APT_NETWORK_NAME="Ministerio"
 
+  print_message "$NETWORK_TITLE" "Asegurate de tener el cable de red conectado antes de continuar"
 
   while true; do
-    proxy=$(
+    apt_ip=$(
       whiptail \
       --title "$NETWORK_TITLE" \
       --backtitle "$BACKTITLE" \
-      --radiolist "Elegir proxy" "$HEIGHT" "$WIDTH" 2 \
-      "10.10.254.218" "SCAI" ON \
-      "10.7.6.6" "Sectorial" OFF \
+      --inputbox "Ingresar una IP que tenga acceso al $APT_PROXY para poder descargar los paquetes" "$HEIGHT" "$WIDTH" \
       3>&2 2>&1 1>&3
     )
 
-    ip=$(
+    user_ip=$(
       whiptail \
       --title "$NETWORK_TITLE" \
       --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar IP" "$HEIGHT" "$WIDTH" \
+      --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
       3>&2 2>&1 1>&3
     )
 
@@ -197,65 +229,45 @@ function configure_network() {
       whiptail \
       --title "$NETWORK_TITLE" \
       --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar dispositivo\n$(nmcli device)" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
-
-    network_name=$(
-      whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar nombre para la red" "$HEIGHT" "$WIDTH" \
+      --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
       3>&2 2>&1 1>&3
     )
 
     if whiptail \
       --title "$NETWORK_TITLE" \
       --backtitle "$BACKTITLE" \
-      --yesno "Confirmar?\nProxy: ${proxy}\nIP: ${ip}\nDisposito: ${device}\nNombre: ${network_name}" "$HEIGHT" "$WIDTH" ; then
+      --yesno "Confirmar?\nIP para instalar paquetes: $apt_ip\nIP final del usuario: $user_ip\nDisposito: $device" "$HEIGHT" "$WIDTH"
+        then
       break
     fi
   done
 
 
-	gsettings set org.gnome.system.proxy.http host ${PROXY}
-	gsettings set org.gnome.system.proxy.http port ${PROXY_PORT}
-	gsettings set org.gnome.system.proxy.https host ${PROXY}
-	gsettings set org.gnome.system.proxy.https port ${PROXY_PORT}
-	gsettings set org.gnome.system.proxy.ftp host ${PROXY}
-	gsettings set org.gnome.system.proxy.ftp port ${PROXY_PORT}
+	gsettings set org.gnome.system.proxy.http host "$PROXY"
+	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.https host "$PROXY"
+	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.ftp host "$PROXY"
+	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.ftp mode manual
 
 	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
-	Acquire::https::proxy \"http://10.7.6.6:3128\";
-	Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
+Acquire::https::proxy \"http://10.7.6.6:3128\";
+Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
 
-	if [[ -f "/etc/NetworkManager/system-connections/${network_name}.nmconnection" ]]
+	if [[ -f "/etc/NetworkManager/system-connections/$APT_NETWORK_NAME.nmconnection" ]]
 	then
-		nmcli connection delete "$network_name"
+		nmcli connection delete "$APT_NETWORK_NAME"
 	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$network_name" ip4 "$ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
-	nmcli connection up "$network_name"
+	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
 
-	NETWORK_CONFIGURED=true
-}
-
-
-
-
-
-
-function print_mark(){
-	printf " ("
-	if $1
+	if [[ -f "/etc/NetworkManager/system-connections/$NETWORK_NAME.nmconnection" ]]
 	then
-		printf '\u2714'
-	else
-		printf '\u2A2F'
+		nmcli connection delete "$NETWORK_NAME"
 	fi
-	printf ")\n"
+	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
+  nmcli connection "$NETWORK_NAME" up
 }
-
-
 
 
 function main_menu(){
