@@ -1,8 +1,7 @@
 #! /bin/bash
 
 readonly HEIGHT=15
-readonly WIDTH=75
-readonly CHOICE_HEIGHT=4
+readonly WIDTH=125
 readonly MENUTITLE="Instalador/configurador"
 readonly BACKTITLE="Instalación y configuración de Linux"
 readonly SCAN_DIR=/home/usuario/scan
@@ -14,7 +13,8 @@ readonly PROXY_PORT="3128"
 readonly APT_PROXY="10.7.6.6"
 readonly PROXY="10.10.254.218"
 readonly NETWORK_NAME="Ministerio"
-readonly APT_NETWORK_NAME="Ministerio"
+readonly APT_NETWORK_NAME="apt"
+readonly PACKAGES_TITLE="Instalación de paquetes"
 readonly PACKAGES=(
     "x11vnc" # programa para control remoto de entornos linux
     "libreoffice" # suite de herramientas
@@ -23,18 +23,19 @@ readonly PACKAGES=(
     "unzip" # para zips
     "vlc" # reproductor de audio y videos
     "thunderbird" # correo
-    "thunderbird-l10n-es-ar" # en castellano
+    "thunderbird-locale-es" # en castellano
     "myspell-es" # correcion en castellano para libreoffice
     "ubuntu-restricted-extras" # algunas utilidades para ubuntu
     "firefox-locale-es" # traducción de firefox
     "ntp" # Protocolo para la sincronizacion del reloj
-    "hplip hplip-gui" # drivers para impresoras HP
+    "hplip"
+    "hplip-gui" # drivers para impresoras HP
     "vim" # editor de texto
     "neovim" # fork de vim mejorado
     "gimp" # editor de imagenes
     "inkscape" # editor de imagenes vectorial
-    "google-chrome-stable" # chrome
-    "anydesk-stable" # control remoto
+#    "google-chrome-stable" # chrome
+#    "anydesk-stable" # control remoto
     "wine" # interfaz para windows
     "ocsinventory-agent" # programa para gestión de inventario
     "cifs-utils" # utilidades para el protocolo cifs
@@ -70,6 +71,24 @@ function network_exists(){
   else
     false
 	fi
+}
+
+
+function reset_fds(){
+  exec 0</dev/tty  # Reset stdin
+  exec 1>/dev/tty  # Reset stdout
+  exec 2>/dev/tty  # Reset stderr
+}
+
+
+function set_proxy(){
+	gsettings set org.gnome.system.proxy mode manual
+	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.http host "$1"
+	gsettings set org.gnome.system.proxy.https host "$1"
+	gsettings set org.gnome.system.proxy.ftp host "$1"
 }
 
 
@@ -124,49 +143,56 @@ function create_user(){
       if whiptail \
         --title "$USER_TITLE" \
         --backtitle "$BACKTITLE" \
-        --yesno "Confirmar?\nUsuario: ${USER_NAME}\nContraseña: ${USER_PASSWD}" \
+        --yesno "Usuario: ${USER_NAME}\nContraseña: ${USER_PASSWD}\n\nConfirmar?" \
         "$HEIGHT" "$WIDTH"
       then
-        sudo useradd -m "$USER_NAME" -p "$USER_PASSWD"
         break
       fi
     done
   fi
-
+  sudo useradd -m "$USER_NAME" -p "$USER_PASSWD"
+  print_message "$USER_TITLE" "El usuario fue creado."
 }
 
 
 function install_packages(){
-  readonly PACKAGES_TITLE="Instalación de paquetes"
 
-  if ! check_connectivity
+  if ! user_exists 
   then
-    print_message "$PACKAGES_TITLE" "No hay conexión a internet. Puede ser porque el cable de red está desconectado o el NetworkManager está desactivado"
+    print_message "$PACKAGES_TITLE" "El usuario no está creado aún"
     return
   fi
 
-  if ! network_exists "$APT_NETWORK_NAME"
+  if ! nmcli connection up $APT_NETWORK_NAME
   then
-    print_message "$PACKAGES_TITLE" "La red para instalar los paquetes no está configurada. Configurala en la sección de configurar red en el menú principal."
+    print_message "$PACKAGES_TITLE" "La red para instalar los paquetes no está configurada o el internet está desactivado."
     return
-  else
-    nmcli connection up "$APT_NETWORK_NAME"
   fi
 
-  sudo wget -q -O - https://dl.google.com/linux/linux_signing_key.pub |
-    sudo apt-key add -
-  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" |
-    sudo tee /etc/apt/sources.list.d/google-chrome.list
+  set_proxy $APT_PROXY
 
-  wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY |
-    sudo apt-key add -
-  echo "deb http://deb.anydesk.com/ all main" |
-    sudo tee /etc/apt/sources.list.d/anydesk-stable.list
+  #sudo wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+  #echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+
+  #wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY | sudo apt-key add -
+  #echo "deb http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk-stable.list
+
+  reset_fds
 
 
-	sudo apt update
-	sudo apt install "${PACKAGES[*]}"
-	sudo apt --fix-broken
+	if ! sudo apt update
+  then 
+    print_message "$PACKAGES_TITLE" "Error: Ocurrió un problema al intentar actualizar el repositorio"
+    return
+  fi
+	
+  if ! sudo apt install "${PACKAGES[@]}"
+  then
+    print_message "$PACKAGES_TITLE" "Error: Ocurrió un problema al intentar instalar los paquetes"
+    return
+  fi
+
+  sudo apt upgrade
 
   sudo systemctl enable cups-browsed
 
@@ -191,6 +217,8 @@ function install_packages(){
     cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$USER_NAME"/Escritorio
     cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$USER_NAME"/Escritorio/
   fi
+
+  set_proxy $PROXY
 }
 
 
@@ -237,7 +265,7 @@ function configure_samba(){
 
 
 function configure_network() {
-  print_message "$NETWORK_TITLE" "Asegurate de tener el cable de red conectado antes de continuar"
+  nmcli networking on
 
   while true; do
     apt_ip=$(
@@ -267,20 +295,12 @@ function configure_network() {
     if whiptail \
       --title "$NETWORK_TITLE" \
       --backtitle "$BACKTITLE" \
-      --yesno "Confirmar?\nIP para instalar paquetes: $apt_ip\nIP final del usuario: $user_ip\nDisposito: $device" "$HEIGHT" "$WIDTH"
+      --yesno "IP para instalar paquetes: $apt_ip\nIP final del usuario: $user_ip\nDisposito: $device\nConfirmar?" "$HEIGHT" "$WIDTH"
         then
       break
     fi
   done
 
-
-	gsettings set org.gnome.system.proxy.http host "$PROXY"
-	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.https host "$PROXY"
-	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.ftp host "$PROXY"
-	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.ftp mode manual
 
 	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
 Acquire::https::proxy \"http://10.7.6.6:3128\";
@@ -297,16 +317,63 @@ Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /d
 		nmcli connection delete "$NETWORK_NAME"
 	fi
 	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
-  nmcli connection "$NETWORK_NAME" up
 }
 
 
+function configure_proxy(){
+  readonly PROXY_TITLE="Configurar proxy"
+  proxy=$(whiptail \
+    --title "$PROXY_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --menu "Elegi un proxy" \
+    "$HEIGHT" "$WIDTH" "2" \
+    "10.10.254.218" "Proxy del intranet" \
+    "10.7.6.6" "Proxy para APT" \
+    2>&1 > /dev/tty)
+  set_proxy "$proxy"
+  print_message "$PROXY_TITLE" "El proxy se configuró en $proxy"
+}
+
+
+function finish_insllation(){
+  readonly FINISH_INSTALL_TITLE="Finalizar instalación"
+
+  if ! user_exists
+  then
+    print_message "$FINISH_INSTALL_TITLE" "El usuario aún no fue creado"
+    return
+  fi
+
+  if ! network_exists "$NETWORK_NAME"
+  then
+    print_message "$FINISH_INSTALL_TITLE" "La red del intranet todavía no está seteada"
+    return
+  fi
+
+  if whiptail \
+    --title "$FINISH_INSTALL_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Es necesario reiniciar el sistema para terminar la instalación.\nFinalizar y reiniciar?" "$HEIGHT" "$WIDTH"
+  then
+    nmcli connection delete "$APT_NETWORK_NAME"
+    nmcli connection up "$NETWORK_NAME"
+    set_proxy "$PROXY"
+    sudo systemctl reboot
+  fi
+}
+
+
+
+
 function main_menu(){
+  readonly CHOICE_HEIGHT=6
   OPTIONS=(\
     1 "Crear usuario"
     2 "Configurar red"
     3 "Instalar paquetes"
-    4 "Salir"
+    4 "Configurar proxy"
+    5 "Terminar instalacion/configuración"
+    6 "Salir"
   )
 
   while true;
@@ -323,6 +390,8 @@ function main_menu(){
       1) create_user;;
       2) configure_network;;
       3) install_packages;;
+      4) configure_proxy;;
+      5) finish_insllation;;
       *) break;;
     esac
   done
