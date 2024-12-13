@@ -12,6 +12,7 @@ readonly GATEWAY='10.7.6.200'
 readonly PROXY_PORT="3128"
 readonly APT_PROXY="10.7.6.6"
 readonly PROXY="10.10.254.218"
+readonly ADMIN_NAME="administrador"
 readonly NETWORK_NAME="Ministerio"
 readonly APT_NETWORK_NAME="apt"
 readonly PACKAGES_TITLE="Instalación de paquetes"
@@ -49,7 +50,9 @@ declare USER_PASSWD=usuario
 
 
 function print_message(){
-  whiptail --title "$1" --backtitle "$BACKTITLE" --msgbox "$2" "$HEIGHT" "$WIDTH"
+  readonly MSG_HEIGHT=15
+  readonly MSG_WIDTH=50
+  whiptail --title "$1" --backtitle "$BACKTITLE" --msgbox "$2" "$MSG_HEIGHT" "$MSG_WIDTH"
 }
 
 
@@ -105,12 +108,20 @@ function check_connectivity(){
 function create_user(){
   USER_TITLE="Configurar usuario"
 
+  if whiptail \
+    --title "$USER_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Se va a configurar la cuenta del usuario. Saltear paso?" "$HEIGHT" "$WIDTH"
+  then
+    return
+  fi
+
   if ! whiptail \
     --title "$USER_TITLE" \
     --backtitle "$BACKTITLE" \
     --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"
   then
-    if [[ $user_exists ]]
+    if user_exists
     then
       if whiptail \
         --title "$USER_TITLE" \
@@ -155,7 +166,77 @@ function create_user(){
 }
 
 
+function configure_network() {
+  if whiptail \
+    --title "$NETWORK_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Se va a configurar la red. Saltear paso?" "$HEIGHT" "$WIDTH"
+  then
+    return
+  fi
+
+  nmcli networking on
+
+	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
+Acquire::https::proxy \"http://10.7.6.6:3128\";
+Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
+
+  while true; do
+    apt_ip=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar una IP que tenga acceso al $APT_PROXY para poder descargar los paquetes" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    user_ip=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    device=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    if whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --yesno "IP para instalar paquetes: $apt_ip\nIP final del usuario: $user_ip\nDisposito: $device\nConfirmar?" "$HEIGHT" "$WIDTH"
+        then
+      break
+    fi
+  done
+
+	if network_exists $APT_NETWORK_NAME
+	then
+		nmcli connection delete "$APT_NETWORK_NAME"
+	fi
+	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
+
+	if network_exists $NETWORK_NAME
+	then
+		nmcli connection delete "$NETWORK_NAME"
+	fi
+	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
+}
+
+
 function install_packages(){
+  if whiptail \
+    --title "$PACKAGES_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Se va a instalar y configurar los paquetes. Saltear?" "$HEIGHT" "$WIDTH"
+  then
+    return
+  fi
 
   if ! user_exists 
   then
@@ -169,16 +250,7 @@ function install_packages(){
     return
   fi
 
-  set_proxy $APT_PROXY
-
-  #sudo wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-  #echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-
-  #wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY | sudo apt-key add -
-  #echo "deb http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk-stable.list
-
   reset_fds
-
 
 	if ! sudo apt update
   then 
@@ -192,8 +264,13 @@ function install_packages(){
     return
   fi
 
-  sudo apt upgrade
+  set_proxy $APT_PROXY
+  wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+  sudo dpkg -i chrome.deb
+  rm chrome.deb
+  set_proxy $PROXY
 
+  sudo apt upgrade
   sudo systemctl enable cups-browsed
 
   configure_vnc
@@ -214,11 +291,43 @@ function install_packages(){
     --backtitle "$BACKTITLE" \
     --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
   then
-    cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$USER_NAME"/Escritorio
-    cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$USER_NAME"/Escritorio/
+    if [[ -d "/home/$USER_NAME/Escritorio" ]]
+    then
+      cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$USER_NAME"/Escritorio/
+      cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$USER_NAME"/Escritorio/
+    else
+      cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$USER_NAME"/Desktop/
+      cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$USER_NAME"/Desktop/
+    fi
+  fi
+}
+
+
+function finish_insllation(){
+  readonly FINISH_INSTALL_TITLE="Finalizar instalación"
+
+  if ! user_exists
+  then
+    print_message "$FINISH_INSTALL_TITLE" "El usuario aún no fue creado"
+    return
   fi
 
-  set_proxy $PROXY
+  if ! network_exists "$NETWORK_NAME"
+  then
+    print_message "$FINISH_INSTALL_TITLE" "La red del intranet todavía no está seteada"
+    return
+  fi
+
+  if whiptail \
+    --title "$FINISH_INSTALL_TITLE" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Es necesario reiniciar el sistema para terminar la instalación.\nFinalizar y reiniciar?" "$HEIGHT" "$WIDTH"
+  then
+    sudo cp /home/"$ADMIN_NAME"/.config/dconf/user /home/"$USER_NAME"/.config/dconf/
+    nmcli connection delete "$APT_NETWORK_NAME"
+    nmcli connection up "$NETWORK_NAME"
+    sudo systemctl reboot
+  fi
 }
 
 
@@ -264,60 +373,6 @@ function configure_samba(){
 }
 
 
-function configure_network() {
-  nmcli networking on
-
-  while true; do
-    apt_ip=$(
-      whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar una IP que tenga acceso al $APT_PROXY para poder descargar los paquetes" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
-
-    user_ip=$(
-      whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
-
-    device=$(
-      whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
-
-    if whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --yesno "IP para instalar paquetes: $apt_ip\nIP final del usuario: $user_ip\nDisposito: $device\nConfirmar?" "$HEIGHT" "$WIDTH"
-        then
-      break
-    fi
-  done
-
-
-	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
-Acquire::https::proxy \"http://10.7.6.6:3128\";
-Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
-
-	if network_exists $APT_NETWORK_NAME
-	then
-		nmcli connection delete "$APT_NETWORK_NAME"
-	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
-
-	if network_exists $NETWORK_NAME
-	then
-		nmcli connection delete "$NETWORK_NAME"
-	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
-}
 
 
 function configure_proxy(){
@@ -335,45 +390,24 @@ function configure_proxy(){
 }
 
 
-function finish_insllation(){
-  readonly FINISH_INSTALL_TITLE="Finalizar instalación"
-
-  if ! user_exists
-  then
-    print_message "$FINISH_INSTALL_TITLE" "El usuario aún no fue creado"
-    return
-  fi
-
-  if ! network_exists "$NETWORK_NAME"
-  then
-    print_message "$FINISH_INSTALL_TITLE" "La red del intranet todavía no está seteada"
-    return
-  fi
-
-  if whiptail \
-    --title "$FINISH_INSTALL_TITLE" \
-    --backtitle "$BACKTITLE" \
-    --yesno "Es necesario reiniciar el sistema para terminar la instalación.\nFinalizar y reiniciar?" "$HEIGHT" "$WIDTH"
-  then
-    nmcli connection delete "$APT_NETWORK_NAME"
-    nmcli connection up "$NETWORK_NAME"
-    set_proxy "$PROXY"
-    sudo systemctl reboot
-  fi
+function normal_installation(){
+  create_user
+  configure_network
+  install_packages
+  finish_insllation
 }
 
 
-
-
 function main_menu(){
-  readonly CHOICE_HEIGHT=6
+  readonly CHOICE_HEIGHT=7
   OPTIONS=(\
-    1 "Crear usuario"
-    2 "Configurar red"
-    3 "Instalar paquetes"
-    4 "Configurar proxy"
-    5 "Terminar instalacion/configuración"
-    6 "Salir"
+    1 "Instalación paso a paso"
+    2 "Crear usuario"
+    3 "Configurar red"
+    4 "Instalar paquetes"
+    5 "Configurar proxy"
+    6 "Terminar instalacion/configuración"
+    7 "Salir"
   )
 
   while true;
@@ -387,11 +421,12 @@ function main_menu(){
       2>&1 > /dev/tty)
 
     case "$CHOICE" in
-      1) create_user;;
-      2) configure_network;;
-      3) install_packages;;
-      4) configure_proxy;;
-      5) finish_insllation;;
+      1) normal_installation;;
+      2) create_user;;
+      3) configure_network;;
+      4) install_packages;;
+      5) configure_proxy;;
+      6) finish_insllation;;
       *) break;;
     esac
   done
