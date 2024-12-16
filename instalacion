@@ -8,11 +8,10 @@ readonly SCAN_DIR=/home/usuario/scan
 readonly SHARE_DIR=/home/usuario/compartida
 readonly NETWORK_TITLE="Configurar red"
 readonly DNS='10.1.4.111,10.1.4.112'
-readonly GATEWAY='10.7.6.200'
 readonly PROXY_PORT="3128"
 readonly APT_PROXY="10.7.6.6"
 readonly PROXY="10.10.254.218"
-readonly NETWORK_NAME="Ministerio"
+readonly NETWORK_NAME="red"
 readonly APT_NETWORK_NAME="apt"
 readonly PACKAGES_TITLE="Instalación de paquetes"
 readonly PACKAGES=(
@@ -155,6 +154,106 @@ function create_user(){
 }
 
 
+function configure_network() {
+  while true
+  do
+    network=$(whiptail \
+      --title "$NETWORK_TITLE" \
+      --radiolist "Seleccionar la red a donde va a estar la pc" "$HEIGHT" "$WIDTH" 6 \
+      "1" "Ministerio - 10.7.6.0/23" OFF \
+      "2" "Secretaría de Ciencia y Tecnología / Secretaría de Transporte: 10.8.50.0/23" OFF \
+      "3" "Secretaría de Turismo - 10.10.14.0/24" OFF \
+      "4" "Terminal de Santa Fe - 10.7.48.0/24" OFF \
+      "5" "Enerfe Puerto Santa Fe - 10.10.20.0/24" OFF \
+      "6" "Aeropuerto de Sauce Viejo - 10.8.44.0/24" OFF \
+      2>&1 > /dev/tty
+    )
+
+    declare gateway;
+    declare network_mask;
+    case "$network" in
+      1) 
+        network="Ministerio"
+        gateway="10.7.6.200"
+        network_mask="23";;
+      2)
+        network="Sec. de Ciencia y Tecnología / Sec. de Transporte"
+        gateway="10.8.50.200"
+        network_mask="23";;
+      3)
+        network="Secretaría de Turismo"
+        gateway="10.10.14.200"
+        network_mask="24";;
+      4)
+        network="Terminal de Santa Fe"
+        gateway="10.7.48.200"
+        network_mask="24";;
+      5)
+        network="Enerfe Puerto de Santa Fe"
+        gateway="10.10.20.200"
+        network_mask="24";;
+      6)
+        network="Aeropuerto de Sauce Viejo"
+        gateway="10.8.44.200"
+        network_mask="24";;
+    esac
+
+    apt_ip=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar una IP que tenga acceso al $APT_PROXY para instalar los paquetes" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    user_ip=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    device=$(
+      whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
+      3>&2 2>&1 1>&3
+    )
+
+    if whiptail \
+      --title "$NETWORK_TITLE" \
+      --backtitle "$BACKTITLE" \
+      --yesno """
+          Red: $network
+          Gateway: $gateway
+          Mascara de subred: $network_mask
+          IP del $APT_PROXY: $apt_ip
+          IP final del usuario: $user_ip
+          Disposito: $device
+          Confirmar?""" "$HEIGHT" "$WIDTH"
+        then
+      break
+    fi
+  done
+
+	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
+Acquire::https::proxy \"http://10.7.6.6:3128\";
+Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
+
+	if network_exists $APT_NETWORK_NAME
+	then
+		nmcli connection delete "$APT_NETWORK_NAME"
+	fi
+	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
+
+	if network_exists $NETWORK_NAME
+	then
+		nmcli connection delete "$NETWORK_NAME"
+	fi
+	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/$gateway" gw4 "$GATEWAY" ipv4.dns "$DNS"
+}
 function install_packages(){
 
   if ! user_exists 
@@ -171,14 +270,7 @@ function install_packages(){
 
   set_proxy $APT_PROXY
 
-  #sudo wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-  #echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-
-  #wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY | sudo apt-key add -
-  #echo "deb http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk-stable.list
-
   reset_fds
-
 
 	if ! sudo apt update
   then 
@@ -224,6 +316,16 @@ function install_packages(){
 
 function configure_vnc(){
 	sudo cp x11vnc.service /etc/systemd/system/
+  echo "[Unit]
+Description=x11vnc service
+After=display-manager.service network.target syslog.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/x11vnc -forever -display :0 -auth guess -passwd 3e2w1q
+ExecStop=/usr/bin/killall x11vnc
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target " | sudo tee -a /etc/systemd/system/x11vnc.service > /dev/null
 	sudo systemctl enable --now x11vnc
 }
 
@@ -256,7 +358,7 @@ function configure_samba(){
 		browseable = yes
 		read only = no
 		force directory mode = 0777
-		force create mode = 0777" > /etc/samba/smb.conf
+		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
 	fi
 
 	sudo cp smb.conf /etc/samba/smb.conf
@@ -264,60 +366,6 @@ function configure_samba(){
 }
 
 
-function configure_network() {
-  nmcli networking on
-
-  while true; do
-    apt_ip=$(
-      whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar una IP que tenga acceso al $APT_PROXY para poder descargar los paquetes" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
-
-    user_ip=$(
-      whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
-
-    device=$(
-      whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
-
-    if whiptail \
-      --title "$NETWORK_TITLE" \
-      --backtitle "$BACKTITLE" \
-      --yesno "IP para instalar paquetes: $apt_ip\nIP final del usuario: $user_ip\nDisposito: $device\nConfirmar?" "$HEIGHT" "$WIDTH"
-        then
-      break
-    fi
-  done
-
-
-	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
-Acquire::https::proxy \"http://10.7.6.6:3128\";
-Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
-
-	if network_exists $APT_NETWORK_NAME
-	then
-		nmcli connection delete "$APT_NETWORK_NAME"
-	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
-
-	if network_exists $NETWORK_NAME
-	then
-		nmcli connection delete "$NETWORK_NAME"
-	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
-}
 
 
 function configure_proxy(){
