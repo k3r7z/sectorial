@@ -238,9 +238,9 @@ function configure_network() {
     fi
   done
 
-	echo "Acquire::http::proxy \"http://10.7.6.6:3128\";
-Acquire::https::proxy \"http://10.7.6.6:3128\";
-Acquire::ftp::proxy \"http://10.7.6.6:3128\";" | sudo tee /etc/apt/apt.conf > /dev/null
+	echo "Acquire::http::proxy \"http://$APT_PROXY:$PROXY_PORT\";
+Acquire::https::proxy \"http://$APT_PROXY:$PROXY_PORT\";
+Acquire::ftp::proxy \"http://$APT_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
 
 	if network_exists $APT_NETWORK_NAME
 	then
