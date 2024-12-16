@@ -43,8 +43,6 @@ readonly PACKAGES=(
     "putty" # cliente de terminal ssh/telnet integrada
     "ubuntu-mate-desktop" # entorno mate
 )
-declare USER_NAME=usuario
-declare USER_PASSWD=usuario
 
 
 function print_message(){
@@ -53,7 +51,7 @@ function print_message(){
 
 
 function user_exists(){
-  exists=$(grep "${USER_NAME}" /etc/passwd)
+  exists=$(grep "$1" /etc/passwd)
   if [[ -z $exists ]]
   then
     false
@@ -102,55 +100,42 @@ function check_connectivity(){
 
 
 function create_user(){
-  USER_TITLE="Configurar usuario"
+  declare user="usuario"
+  declare passwd="usuario"
+  readonly title="Configurar usuario"
 
-  if ! whiptail \
-    --title "$USER_TITLE" \
-    --backtitle "$BACKTITLE" \
-    --yesno "Utilizar usuario/usuario?" "$HEIGHT" "$WIDTH"
-  then
-    if [[ $user_exists ]]
-    then
-      if whiptail \
-        --title "$USER_TITLE" \
+  while true
+  do
+    user=$(
+      whiptail \
+        --title "$title" \
         --backtitle "$BACKTITLE" \
-        --yesno "El usuario $USER_NAME ya existe. Eliminar y crear uno nuevo?" \
-        "$HEIGHT" "$WIDTH"
-      then
-        userdel -r "$USER_NAME"
-        print_message "Se eliminó el usuario"
-      else
-        return
-      fi
-    fi
-
-    while true
-    do
-      USER_NAME=$(
-        whiptail \
-          --title "$USER_TITLE" \
-          --backtitle "$BACKTITLE" \
-          --inputbox "Ingresar usuario" "$HEIGHT" "$WIDTH" \
-          3>&1 1>&2 2>&3)
-
-      USER_PASSWD=$(whiptail \
-        --title "$USER_TITLE" \
-        --backtitle "$BACKTITLE" \
-        --inputbox "Ingresar contraseña" "$HEIGHT" "$WIDTH" \
+        --inputbox "Ingresar usuario" "$HEIGHT" "$WIDTH" \
         3>&1 1>&2 2>&3)
 
-      if whiptail \
-        --title "$USER_TITLE" \
-        --backtitle "$BACKTITLE" \
-        --yesno "Usuario: ${USER_NAME}\nContraseña: ${USER_PASSWD}\n\nConfirmar?" \
-        "$HEIGHT" "$WIDTH"
-      then
-        break
-      fi
-    done
-  fi
-  sudo useradd -m "$USER_NAME" -p "$USER_PASSWD"
-  print_message "$USER_TITLE" "El usuario fue creado."
+    passwd=$(whiptail \
+      --title "$title" \
+      --backtitle "$BACKTITLE" \
+      --inputbox "Ingresar contraseña" "$HEIGHT" "$WIDTH" \
+      3>&1 1>&2 2>&3)
+
+    if user_exists "$user"
+    then
+      print_message "$title" "El usuario ya existe"
+      break
+    fi
+
+    if whiptail \
+      --title "$title" \
+      --backtitle "$BACKTITLE" \
+      --yesno "Usuario: $user\nContraseña: $passwd\n\nConfirmar?" \
+      "$HEIGHT" "$WIDTH"
+    then
+      sudo useradd -m "$user" -p "$passwd"
+      print_message "$title" "El usuario fue creado."
+      break
+    fi
+  done
 }
 
 
@@ -246,13 +231,13 @@ Acquire::ftp::proxy \"http://$APT_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.
 	then
 		nmcli connection delete "$APT_NETWORK_NAME"
 	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$GATEWAY" ipv4.dns "$DNS"
+	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$gateway" ipv4.dns "$DNS"
 
 	if network_exists $NETWORK_NAME
 	then
 		nmcli connection delete "$NETWORK_NAME"
 	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/$gateway" gw4 "$GATEWAY" ipv4.dns "$DNS"
+	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/$gateway" gw4 "$gateway" ipv4.dns "$DNS"
 }
 function install_packages(){
 
