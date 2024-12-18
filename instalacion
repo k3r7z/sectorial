@@ -131,8 +131,19 @@ function create_user(){
       --yesno "Usuario: $user\nContraseña: $passwd\n\nConfirmar?" \
       "$HEIGHT" "$WIDTH"
     then
-      sudo useradd -m "$user" -p "$passwd"
-      print_message "$title" "El usuario fue creado."
+      if ! sudo useradd -m "$user"
+      then
+        print_message "$title" "Ocurrió un error al crear el usuario"
+        break
+      fi
+
+      if ! echo "$user:$passwd" | sudo chpasswd
+      then
+        print_message "$title" "Ocurrió un error al intentar setear la contraseña del usuario"
+        break
+      fi
+
+      print_message "$title" "El usuario fue creado con éxito"
       break
     fi
   done
