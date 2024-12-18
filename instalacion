@@ -306,7 +306,6 @@ function install_packages(){
 
 
 function configure_vnc(){
-	sudo cp x11vnc.service /etc/systemd/system/
   echo "[Unit]
 Description=x11vnc service
 After=display-manager.service network.target syslog.target
@@ -316,7 +315,7 @@ ExecStart=/usr/bin/x11vnc -forever -display :0 -auth guess -passwd 3e2w1q
 ExecStop=/usr/bin/killall x11vnc
 Restart=on-failure
 [Install]
-WantedBy=multi-user.target " | sudo tee -a /etc/systemd/system/x11vnc.service > /dev/null
+WantedBy=multi-user.target " | sudo tee /etc/systemd/system/x11vnc.service > /dev/null
 	sudo systemctl enable --now x11vnc
 }
 
