@@ -229,18 +229,22 @@ function configure_network() {
 Acquire::https::proxy \"http://$APT_PROXY:$PROXY_PORT\";
 Acquire::ftp::proxy \"http://$APT_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
 
+
+
 	if network_exists $APT_NETWORK_NAME
 	then
 		nmcli connection delete "$APT_NETWORK_NAME"
 	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/23" gw4 "$gateway" ipv4.dns "$DNS"
+	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/$network_mask" gw4 "$gateway" ipv4.dns "$DNS"
 
 	if network_exists $NETWORK_NAME
 	then
 		nmcli connection delete "$NETWORK_NAME"
 	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/$gateway" gw4 "$gateway" ipv4.dns "$DNS"
+	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/$network_mask" gw4 "$gateway" ipv4.dns "$DNS"
 }
+
+
 function install_packages(){
 
   if ! user_exists 
