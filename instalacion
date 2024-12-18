@@ -43,6 +43,8 @@ readonly PACKAGES=(
     "putty" # cliente de terminal ssh/telnet integrada
     "ubuntu-mate-desktop" # entorno mate
 )
+declare user="usuario"
+declare passwd="usuario"
 
 
 function print_message(){
@@ -100,8 +102,6 @@ function check_connectivity(){
 
 
 function create_user(){
-  declare user="usuario"
-  declare passwd="usuario"
   readonly title="Configurar usuario"
 
   while true
@@ -297,8 +297,8 @@ function install_packages(){
     --backtitle "$BACKTITLE" \
     --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
   then
-    cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$USER_NAME"/Escritorio
-    cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$USER_NAME"/Escritorio/
+    cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Escritorio
+    cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Escritorio/
   fi
 
   set_proxy $PROXY
