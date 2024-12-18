@@ -140,6 +140,8 @@ function create_user(){
 
 
 function configure_network() {
+
+  print_message "$NETWORK_TITLE" "Si la máquina no tiene ninguna IP asignada, ir al repo a reservar una ahora."
   while true
   do
     network=$(whiptail \
