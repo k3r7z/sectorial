@@ -229,7 +229,7 @@ function configure_network() {
 Acquire::https::proxy \"http://$APT_PROXY:$PROXY_PORT\";
 Acquire::ftp::proxy \"http://$APT_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
 
-  
+
 
 	if network_exists $APT_NETWORK_NAME
 	then
