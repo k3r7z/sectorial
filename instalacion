@@ -1,19 +1,17 @@
 #! /bin/bash
 
+source version
 readonly HEIGHT=15
 readonly WIDTH=125
-readonly MENUTITLE="Instalador/configurador"
 readonly BACKTITLE="Instalación y configuración de Linux"
 readonly SCAN_DIR=/home/usuario/scan
 readonly SHARE_DIR=/home/usuario/compartida
-readonly NETWORK_TITLE="Configurar red"
 readonly DNS='10.1.4.111,10.1.4.112'
 readonly PROXY_PORT="3128"
-readonly APT_PROXY="10.7.6.6"
-readonly PROXY="10.10.254.218"
+readonly ADMIN_PROXY="10.7.6.6"
+readonly SCAI_PROXY="10.10.254.218"
 readonly NETWORK_NAME="red"
-readonly APT_NETWORK_NAME="apt"
-readonly PACKAGES_TITLE="Instalación de paquetes"
+readonly ADMIN_NETWORK_NAME="admin"
 readonly PACKAGES=(
     "x11vnc" # programa para control remoto de entornos linux
     "libreoffice" # suite de herramientas
@@ -33,8 +31,7 @@ readonly PACKAGES=(
     "neovim" # fork de vim mejorado
     "gimp" # editor de imagenes
     "inkscape" # editor de imagenes vectorial
-#    "google-chrome-stable" # chrome
-#    "anydesk-stable" # control remoto
+    "neovim" # el mejor editor
     "wine" # interfaz para windows
     "ocsinventory-agent" # programa para gestión de inventario
     "cifs-utils" # utilidades para el protocolo cifs
@@ -43,8 +40,14 @@ readonly PACKAGES=(
     "putty" # cliente de terminal ssh/telnet integrada
     "ubuntu-mate-desktop" # entorno mate
 )
+declare admin_config_on=false
 declare user="usuario"
 declare passwd="usuario"
+declare admin_ip
+declare user_ip
+declare user_ready=false
+declare network_configured=false
+declare packages_installed=false
 
 
 function print_message(){
@@ -52,7 +55,7 @@ function print_message(){
 }
 
 
-function user_exists(){
+function user_exists(){ 
   exists=$(grep "$1" /etc/passwd)
   if [[ -z $exists ]]
   then
@@ -63,46 +66,8 @@ function user_exists(){
 }
 
 
-function network_exists(){
-	if [[ -f "/etc/NetworkManager/system-connections/${1}.nmconnection" ]]
-	then
-    true
-  else
-    false
-	fi
-}
-
-
-function reset_fds(){
-  exec 0</dev/tty  # Reset stdin
-  exec 1>/dev/tty  # Reset stdout
-  exec 2>/dev/tty  # Reset stderr
-}
-
-
-function set_proxy(){
-	gsettings set org.gnome.system.proxy mode manual
-	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.http host "$1"
-	gsettings set org.gnome.system.proxy.https host "$1"
-	gsettings set org.gnome.system.proxy.ftp host "$1"
-}
-
-
-function check_connectivity(){
-  if [[ $(nmcli networking connectivity check) == "full" ]]
-  then
-    true
-  else
-    false
-  fi
-}
-
-
 function create_user(){
-  readonly title="Configurar usuario"
+  readonly title="1. Creación del usuario"
 
   while true
   do
@@ -142,21 +107,90 @@ function create_user(){
         print_message "$title" "Ocurrió un error al intentar setear la contraseña del usuario"
         break
       fi
-
-      print_message "$title" "El usuario fue creado con éxito"
+        print_message "$title" "El usuario fue creado con éxito"
+        user_ready=true
       break
     fi
   done
 }
 
 
-function configure_network() {
+function network_exists(){
+	if [[ -f "/etc/NetworkManager/system-connections/${1}.nmconnection" ]]
+	then
+    true
+  else
+    false
+	fi
+}
 
-  print_message "$NETWORK_TITLE" "Si la máquina no tiene ninguna IP asignada, ir al repo a reservar una ahora."
+
+function reset_fds(){
+  exec 0</dev/tty  # Reset stdin
+  exec 1>/dev/tty  # Reset stdout
+  exec 2>/dev/tty  # Reset stderr
+}
+
+
+function set_proxy(){
+	gsettings set org.gnome.system.proxy mode manual
+	gsettings set org.gnome.system.proxy.http port "$SCAI_PROXY_PORT"
+	gsettings set org.gnome.system.proxy.https port "$SCAI_PROXY_PORT"
+	gsettings set org.gnome.system.proxy.ftp port "$SCAI_PROXY_PORT"
+	gsettings set org.gnome.system.proxy.http host "$1"
+	gsettings set org.gnome.system.proxy.https host "$1"
+	gsettings set org.gnome.system.proxy.ftp host "$1"
+}
+
+
+function set_network_up(){
+  nmcli connection up "$1"
+}
+
+
+function install_chrome(){
+  if ! wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb || ! sudo dpkg -i chrome.deb
+  then
+      print_message "Instalación de chrome" "Ocurrió un error al intentar instalar chrome"
+  else 
+    rm chrome.deb
+  fi
+}
+
+
+function check_connectivity(){
+  if [[ $(nmcli networking connectivity check) == "full" ]]
+  then
+    true
+  else
+    false
+  fi
+}
+
+
+function set_admin_network_up(){
+  set_proxy "$ADMIN_PROXY"
+  set_network_up "$ADMIN_NETWORK_NAME"
+  admin_config_on=true
+  return 0
+}
+
+function set_user_network_up(){
+  set_proxy "$SCAI_PROXY"
+  set_network_up "$NETWORK_NAME"
+  sudo cp ~/.config/dconf/user /home/"$user"/.config/dconf/user
+  admin_config_on=false
+  return 0
+}
+
+
+function configure_network() {
+  readonly title="2. Configurar red"
+  print_message "$title" "Si la máquina no tiene ninguna IP asignada, ir al repo a reservar una ahora."
   while true
   do
     network=$(whiptail \
-      --title "$NETWORK_TITLE" \
+      --title "$title" \
       --radiolist "Seleccionar la red a donde va a estar la pc" "$HEIGHT" "$WIDTH" 6 \
       "1" "Ministerio - 10.7.6.0/23" OFF \
       "2" "Secretaría de Ciencia y Tecnología / Secretaría de Transporte: 10.8.50.0/23" OFF \
@@ -196,17 +230,17 @@ function configure_network() {
         network_mask="24";;
     esac
 
-    apt_ip=$(
+    admin_ip=$(
       whiptail \
-      --title "$NETWORK_TITLE" \
+      --title "$title" \
       --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar una IP que tenga acceso al $APT_PROXY para instalar los paquetes" "$HEIGHT" "$WIDTH" \
+      --inputbox "Ingresar una IP que tenga acceso al $ADMIN_PROXY para instalar los paquetes" "$HEIGHT" "$WIDTH" \
       3>&2 2>&1 1>&3
     )
 
     user_ip=$(
       whiptail \
-      --title "$NETWORK_TITLE" \
+      --title "$title" \
       --backtitle "$BACKTITLE" \
       --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
       3>&2 2>&1 1>&3
@@ -214,20 +248,20 @@ function configure_network() {
 
     device=$(
       whiptail \
-      --title "$NETWORK_TITLE" \
+      --title "$title" \
       --backtitle "$BACKTITLE" \
       --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
       3>&2 2>&1 1>&3
     )
 
     if whiptail \
-      --title "$NETWORK_TITLE" \
+      --title "$title" \
       --backtitle "$BACKTITLE" \
       --yesno """
           Red: $network
           Gateway: $gateway
           Mascara de subred: $network_mask
-          IP del $APT_PROXY: $apt_ip
+          IP del $ADMIN_PROXY: $admin_ip
           IP final del usuario: $user_ip
           Disposito: $device
           Confirmar?""" "$HEIGHT" "$WIDTH"
@@ -236,17 +270,15 @@ function configure_network() {
     fi
   done
 
-	echo "Acquire::http::proxy \"http://$APT_PROXY:$PROXY_PORT\";
-Acquire::https::proxy \"http://$APT_PROXY:$PROXY_PORT\";
-Acquire::ftp::proxy \"http://$APT_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
+	echo "Acquire::http::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
+Acquire::https::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
+Acquire::ftp::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
 
-
-
-	if network_exists $APT_NETWORK_NAME
+	if network_exists $ADMIN_NETWORK_NAME
 	then
-		nmcli connection delete "$APT_NETWORK_NAME"
+		nmcli connection delete "$ADMIN_NETWORK_NAME"
 	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$APT_NETWORK_NAME" ip4 "$apt_ip/$network_mask" gw4 "$gateway" ipv4.dns "$DNS"
+	nmcli connection add type ethernet ifname "$device" con-name "$ADMIN_NETWORK_NAME" ip4 "$admin_ip/$network_mask" gw4 "$gateway" ipv4.dns "$DNS"
 
 	if network_exists $NETWORK_NAME
 	then
@@ -256,63 +288,38 @@ Acquire::ftp::proxy \"http://$APT_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.
 }
 
 
-function install_packages(){
+function configure_samba(){
+	if [[ ! -d $SCAN_DIR ]]
+	then
+		sudo mkdir $SCAN_DIR
+		sudo chown usuario:usuario $SCAN_DIR
+		sudo chmod 777 $SCAN_DIR
+		echo "[scan]
+		path = $SCAN_DIR
+		public = yes
+		writable = yes
+		browseable = yes
+		read only = no
+		force directory mode = 0777
+		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
+	fi
 
-  if ! user_exists 
-  then
-    print_message "$PACKAGES_TITLE" "El usuario no está creado aún"
-    return
-  fi
+	if [[ ! -d $SHARE_DIR ]]
+	then
+		sudo mkdir $SHARE_DIR
+		sudo chown usuario:usuario $SHARE_DIR
+		sudo chmod 777 $SHARE_DIR
+		echo "[compartida]
+		path = $SHARE_DIR
+		public = yes
+		writable = yes
+		browseable = yes
+		read only = no
+		force directory mode = 0777
+		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
+	fi
 
-  if ! nmcli connection up $APT_NETWORK_NAME
-  then
-    print_message "$PACKAGES_TITLE" "La red para instalar los paquetes no está configurada o el internet está desactivado."
-    return
-  fi
-
-  set_proxy $APT_PROXY
-
-  reset_fds
-
-	if ! sudo apt update
-  then 
-    print_message "$PACKAGES_TITLE" "Error: Ocurrió un problema al intentar actualizar el repositorio"
-    return
-  fi
-	
-  if ! sudo apt install "${PACKAGES[@]}"
-  then
-    print_message "$PACKAGES_TITLE" "Error: Ocurrió un problema al intentar instalar los paquetes"
-    return
-  fi
-
-  sudo apt upgrade
-
-  sudo systemctl enable cups-browsed
-
-  configure_vnc
-  configure_samba
-  
-  if whiptail\
-    --title "$PACKAGES_TITLE" \
-    --backtitle "$BACKTITLE" \
-    --yesno "Desactivar búsqueda de las impresoras?" "$HEIGHT" "$WIDTH"
-  then
-    sudo sed -i 's/^BrowseRemoteProtocols.*/BrowseRemoteProtocols none/g' /etc/cups/cups-browsed.conf
-    sudo systemctl reload-or-restart cups-browsed
-    print_message "$PACKAGES_TITLE" "Se ha desactivado la búsqueda de impresoras"
-  fi
-
-  if whiptail\
-    --title "$PACKAGES_TITLE" \
-    --backtitle "$BACKTITLE" \
-    --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
-  then
-    cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Escritorio
-    cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Escritorio/
-  fi
-
-  set_proxy $PROXY
+	sudo systemctl reload-or-restart smbd
 }
 
 
@@ -331,96 +338,161 @@ WantedBy=multi-user.target " | sudo tee /etc/systemd/system/x11vnc.service > /de
 }
 
 
-function configure_samba(){
-	if [[ ! -d $SCAN_DIR ]]
-	then
-		sudo mkdir $SCAN_DIR
-		sudo chown usuario:usuario $SCAN_DIR
-		sudo chmod 777 $SCAN_DIR
-		echo "[scan]
-		path = /home/usuario/Escritorio/scan
-		public = yes
-		writable = yes
-		browseable = yes
-		read only = no
-		force directory mode = 0777
-		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
-	fi
-
-	if [[ ! -d $SHARE_DIR ]]
-	then
-		sudo mkdir $SHARE_DIR
-		sudo chown usuario:usuario $SHARE_DIR
-		sudo chmod 777 $SHARE_DIR
-		echo "[compartida]
-		path = /home/usuario/compartida
-		public = yes
-		writable = yes
-		browseable = yes
-		read only = no
-		force directory mode = 0777
-		force create mode = 0777" | sudo tee -a /etc/samba/smb.conf > /dev/null
-	fi
-
-	sudo cp smb.conf /etc/samba/smb.conf
-	sudo systemctl reload-or-restart smbd
+function configure_services(){
+  sudo systemctl enable cups-browsed
+  configure_vnc
+  configure_samba
 }
 
 
+function install_packages(){
+  readonly title="3. Instalación de paquetes"
 
-
-function configure_proxy(){
-  readonly PROXY_TITLE="Configurar proxy"
-  proxy=$(whiptail \
-    --title "$PROXY_TITLE" \
-    --backtitle "$BACKTITLE" \
-    --menu "Elegi un proxy" \
-    "$HEIGHT" "$WIDTH" "2" \
-    "10.10.254.218" "Proxy del intranet" \
-    "10.7.6.6" "Proxy para APT" \
-    2>&1 > /dev/tty)
-  set_proxy "$proxy"
-  print_message "$PROXY_TITLE" "El proxy se configuró en $proxy"
-}
-
-
-function finish_insllation(){
-  readonly FINISH_INSTALL_TITLE="Finalizar instalación"
-
-  if ! user_exists
+  if ! network_configured
   then
-    print_message "$FINISH_INSTALL_TITLE" "El usuario aún no fue creado"
+    print_message "$title" "Error: Ocurrió un problema al intentar actualizar el repositorio"
     return
   fi
 
-  if ! network_exists "$NETWORK_NAME"
+  set_admin_network_up true
+  reset_fds
+
+	if ! sudo apt update
   then
-    print_message "$FINISH_INSTALL_TITLE" "La red del intranet todavía no está seteada"
+    print_message "$title" "Error: Ocurrió un problema al intentar actualizar el repositorio"
+    return
+  fi
+	
+  sudo apt install "${PACKAGES[@]}"
+
+  if ! sudo apt upgrade
+  then
+    print_message "$title" "Error: Ocurrió un problema al intentar instalar los paquetes"
+    return
+  fi
+
+  install_chrome
+  configure_services
+
+  if whiptail\
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
+  then
+    if [[ -d "/home/$user/Desktop" ]]
+    then
+      cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Desktop/
+      cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Desktop/
+    else
+      cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Escritorio/
+      cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Escritorio/
+    fi
+  fi
+  set_user_network_up
+}
+
+
+function configure_active_network(){
+  readonly title="Configurar red activa"
+
+  net_config=$(whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --radiolist "Elegir red" \
+    "$HEIGHT" "$WIDTH" "2" \
+    "1" "$SCAI_PROXY / $user_ip - Red del SCAI" \
+    "2" "$ADMIN_PROXY / $admin_ip - Red del administrador para descargar/actualizar paquetes" \
+    2>&1 > /dev/tty)
+
+  case $net_config in
+    "1") 
+      if set_user_network_up 
+      then
+        print_message "$title" "Se configuró la red para el usuario"
+      else
+        print_message "$title" "Hubo un error al configurar la red del usuario"
+      fi;;
+    "2")
+      if set_admin_network_up
+      then
+        print_message "$title" "Se configuró la red para el administrador"
+      else
+        print_message "$title" "Hubo un error al configurar la red del administrador"
+      fi;;
+  esac
+}
+
+
+function finish_installation(){
+  readonly title="4.Finalizar instalación"
+
+  if ! user_ready
+  then
+    print_message "$title" "El usuario aún no fue creado"
+    return
+  fi
+
+  if ! network_configured
+  then
+    print_message "$title" "La red no está configurada"
+    return
+  fi
+
+  if ! packages_installed
+  then
+    print_message "$title" "Los paquetes aún no están instalados"
     return
   fi
 
   if whiptail \
-    --title "$FINISH_INSTALL_TITLE" \
+    --title "$title" \
     --backtitle "$BACKTITLE" \
     --yesno "Es necesario reiniciar el sistema para terminar la instalación.\nFinalizar y reiniciar?" "$HEIGHT" "$WIDTH"
   then
-    nmcli connection delete "$APT_NETWORK_NAME"
-    nmcli connection up "$NETWORK_NAME"
-    set_proxy "$PROXY"
+    set_user_network_up
     sudo systemctl reboot
   fi
 }
 
 
+function packages_menu(){
+  readonly title='Menú de instalación de paquetes'
+  OPTIONS=(\
+  )
+
+  choice=$(whiptail --clear \
+    --backtitle "$BACKTITLE" \
+    --title "$title" \
+    --menu "$MENU" \
+    "$HEIGHT" "$WIDTH" "$CHOICE_HEIGHT" \
+    1 "Instalar/actualizar paquetes" \
+    2 "Instalar/actualizar paquetes externos" \
+    3 "Ir al menú" \
+    2>&1 > /dev/tty)
+
+  case $choice in
+    1) install_packages;;
+    2) install_external_packages;;
+    *) main_menu;;
+  esac
+}
+
+
+function sequential_mode(){
+  create_user
+  configure_network
+  finish_installation
+}
 
 
 function main_menu(){
+  readonly menu_title="Instalador/configurador"
   readonly CHOICE_HEIGHT=6
   OPTIONS=(\
-    1 "Crear usuario"
-    2 "Configurar red"
-    3 "Instalar paquetes"
-    4 "Configurar proxy"
+    1 "Instalación secuencial"
+    2 "Crear usuario"
+    3 "Configurar red"
+    4 "Instalar paquetes"
     5 "Terminar instalacion/configuración"
     6 "Salir"
   )
@@ -429,18 +501,18 @@ function main_menu(){
   do
     CHOICE=$(whiptail --clear \
       --backtitle "$BACKTITLE" \
-      --title "$MENUTITLE" \
+      --title "$menu_title" \
       --menu "$MENU" \
       "$HEIGHT" "$WIDTH" "$CHOICE_HEIGHT" \
       "${OPTIONS[@]}" \
       2>&1 > /dev/tty)
 
     case "$CHOICE" in
-      1) create_user;;
-      2) configure_network;;
-      3) install_packages;;
-      4) configure_proxy;;
-      5) finish_insllation;;
+      1) sequential_mode;;
+      2) create_user;;
+      3) configure_network;;
+      4) install_packages;;
+      5) finish_installation;;
       *) break;;
     esac
   done
