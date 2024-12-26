@@ -392,27 +392,38 @@ function install_packages(){
 }
 
 
-function configure_active_network(){
-  readonly title="Configurar red activa"
+function set_active_network(){
+  local title="Configurar red activa"
+
+  if [[ -z $user_ip || -z $admin_ip ]]
+  then
+    print_message "$title" "La red no está configurada"
+    return
+  fi
+
+  local options=(\
+    1 "$SCAI_PROXY / $user_ip - Red del SCAI"
+    2 "$ADMIN_PROXY / $admin_ip - Red del administrador para descargar/actualizar paquetes"
+  )
+  local size=$(( ${#options[@]} / 2))
 
   net_config=$(whiptail \
     --title "$title" \
     --backtitle "$BACKTITLE" \
     --radiolist "Elegir red" \
-    "$HEIGHT" "$WIDTH" "2" \
-    "1" "$SCAI_PROXY / $user_ip - Red del SCAI" \
-    "2" "$ADMIN_PROXY / $admin_ip - Red del administrador para descargar/actualizar paquetes" \
+    "$HEIGHT" "$WIDTH" $size \
+    "${options[@]}" \
     2>&1 > /dev/tty)
 
   case $net_config in
-    "1") 
-      if set_user_network_up 
+    1) 
+      if set_user_network_up
       then
         print_message "$title" "Se configuró la red para el usuario"
       else
         print_message "$title" "Hubo un error al configurar la red del usuario"
       fi;;
-    "2")
+    2)
       if set_admin_network_up
       then
         print_message "$title" "Se configuró la red para el administrador"
@@ -485,26 +496,26 @@ function sequential_mode(){
 }
 
 
-function main_menu(){
-  readonly menu_title="Instalador/configurador"
-  readonly CHOICE_HEIGHT=6
-  OPTIONS=(\
-    1 "Instalación secuencial"
+function installation_menu(){
+  local title="Instalador/configurador"
+  local options=(\
+    1 "Iniciar instalación secuencial"
     2 "Crear usuario"
     3 "Configurar red"
     4 "Instalar paquetes"
     5 "Terminar instalacion/configuración"
-    6 "Salir"
+    6 "Volver"
   )
+  local size=$(( ${#options[@]} / 2))
 
   while true;
   do
     CHOICE=$(whiptail --clear \
       --backtitle "$BACKTITLE" \
-      --title "$menu_title" \
+      --title "$title" \
       --menu "$MENU" \
-      "$HEIGHT" "$WIDTH" "$CHOICE_HEIGHT" \
-      "${OPTIONS[@]}" \
+      "$HEIGHT" "$WIDTH" $size \
+      "${options[@]}" \
       2>&1 > /dev/tty)
 
     case "$CHOICE" in
@@ -513,6 +524,60 @@ function main_menu(){
       3) configure_network;;
       4) install_packages;;
       5) finish_installation;;
+      *) break;;
+    esac
+  done
+}
+
+
+function utils_menu(){
+  local title="Utilidades"
+  local options=(\
+    1 "Setear red activa"
+    2 "Volver"
+  )
+  local size=$(( ${#options[@]} / 2))
+
+  while true;
+  do
+    choice=$(whiptail --clear \
+      --backtitle "$BACKTITLE" \
+      --title "$title" \
+      --menu "$MENU" \
+      "$HEIGHT" "$WIDTH" $size \
+      "${options[@]}" \
+      2>&1 >/dev/tty)
+
+    case "$choice" in
+      1) set_active_network;;
+      *) break;;
+    esac
+  done
+}
+
+
+function main_menu(){
+  local title="Instalador/configurador"
+  local options=(\
+    1 "Instalación y configuración"
+    2 "Utilidades"
+    3 "Salir"
+  )
+  local size=$(( ${#options[@]} / 2))
+
+  while true;
+  do
+    choice=$(whiptail --clear \
+      --backtitle "$BACKTITLE" \
+      --title "$title" \
+      --menu "$MENU" \
+      "$HEIGHT" "$WIDTH" $size \
+      "${options[@]}" \
+      2>&1 > /dev/tty)
+
+    case "$choice" in
+      1) installation_menu;;
+      2) utils_menu;;
       *) break;;
     esac
   done
