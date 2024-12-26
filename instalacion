@@ -46,8 +46,6 @@ declare passwd="usuario"
 declare admin_ip
 declare user_ip
 declare user_ready=false
-declare network_configured=false
-declare packages_installed=false
 
 
 function print_message(){
@@ -149,11 +147,13 @@ function set_network_up(){
 
 
 function install_chrome(){
+  local title="Instalación de Google Chrome"
   if ! wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb || ! sudo dpkg -i chrome.deb
   then
-      print_message "Instalación de chrome" "Ocurrió un error al intentar instalar chrome"
+      print_message "$title" "Ocurrió un error al intentar instalar chrome"
   else 
     rm chrome.deb
+    print_message "$title" "Se instaló google chrome"
   fi
 }
 
@@ -200,8 +200,7 @@ function configure_network() {
       "6" "Aeropuerto de Sauce Viejo - 10.8.44.0/24" OFF \
       2>&1 > /dev/tty
     )
-
-    declare gateway;
+declare gateway;
     declare network_mask;
     case "$network" in
       1) 
@@ -348,13 +347,13 @@ function configure_services(){
 function install_packages(){
   readonly title="3. Instalación de paquetes"
 
-  if ! network_configured
+  if ! network_exists "$ADMIN_NETWORK_NAME"
   then
     print_message "$title" "Error: Ocurrió un problema al intentar actualizar el repositorio"
     return
   fi
 
-  set_admin_network_up true
+  set_admin_network_up
   reset_fds
 
 	if ! sudo apt update
@@ -466,26 +465,29 @@ function finish_installation(){
 }
 
 
-function packages_menu(){
-  readonly title='Menú de instalación de paquetes'
-  OPTIONS=(\
+function install_optionals_packages(){
+  local title="Instalar/actualizar paquetes opcionales"
+  local options=(\
+    1 "Google chrome"
+    2 "Volver"
   )
+  local size=$(( ${#options[@]} / 2))
 
-  choice=$(whiptail --clear \
-    --backtitle "$BACKTITLE" \
-    --title "$title" \
-    --menu "$MENU" \
-    "$HEIGHT" "$WIDTH" "$CHOICE_HEIGHT" \
-    1 "Instalar/actualizar paquetes" \
-    2 "Instalar/actualizar paquetes externos" \
-    3 "Ir al menú" \
-    2>&1 > /dev/tty)
+  while true
+  do
+    choice=$(whiptail --clear \
+      --backtitle "$BACKTITLE" \
+      --title "$title" \
+      --menu "$MENU" \
+      "$HEIGHT" "$WIDTH" $size \
+      "${options[@]}" \
+      2>&1 > /dev/tty)
 
-  case $choice in
-    1) install_packages;;
-    2) install_external_packages;;
-    *) main_menu;;
-  esac
+    case $choice in
+      1) install_chrome;;
+      *) break;;
+    esac
+  done
 }
 
 
@@ -503,8 +505,9 @@ function installation_menu(){
     2 "Crear usuario"
     3 "Configurar red"
     4 "Instalar paquetes"
-    5 "Terminar instalacion/configuración"
-    6 "Volver"
+    5 "Instalar paquetes opcionales"
+    6 "Terminar instalacion/configuración"
+    7 "Volver"
   )
   local size=$(( ${#options[@]} / 2))
 
@@ -523,7 +526,8 @@ function installation_menu(){
       2) create_user;;
       3) configure_network;;
       4) install_packages;;
-      5) finish_installation;;
+      5) install_optionals_packages;;
+      6) finish_installation;;
       *) break;;
     esac
   done
