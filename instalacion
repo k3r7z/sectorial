@@ -157,12 +157,29 @@ function set_network_up(){
 
 function install_chrome(){
   local title="Instalación de Google Chrome"
-  if ! wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb || ! sudo dpkg -i chrome.deb
+  wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+  sudo dpkg -i chrome.deb
+  rm chrome.deb
+
+  if ! command -v google-chrome 1>/dev/null
   then
       print_message "$title" "Ocurrió un error al intentar instalar chrome"
-  else 
-    rm chrome.deb
-    print_message "$title" "Se instaló google chrome"
+  fi
+}
+
+
+function install_anydesk(){
+  local title="Instalación de AnyDesk"
+
+  wget -O- https://keys.anydesk.com/repos/DEB-GPG-KEY | gpg --dearmor | sudo tee /etc/apt/keyrings/anydesk.gpg 1>/dev/null
+  echo "deb [signed-by=/etc/apt/keyrings/anydesk.gpg] http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk.list
+
+  sudo apt update
+  sudo apt -y install anydesk
+
+  if ! commnad -v anydesk 1>/dev/null 2>/dev/null
+  then
+    print_message "$title" "Hubo un error al instalar anydesk"
   fi
 }
 
@@ -379,7 +396,6 @@ function install_packages(){
     return
   fi
 
-  install_chrome
   configure_services
 
   if whiptail\
@@ -482,19 +498,22 @@ function install_optionals_packages(){
   )
   local size=$(( ${#options[@]} / 2))
 
-  while true
-  do
-    choice=$(whiptail --clear \
-      --backtitle "$BACKTITLE" \
-      --title "$title" \
-      --menu "$MENU" \
-      "$HEIGHT" "$WIDTH" $size \
-      "${options[@]}" \
-      2>&1 > /dev/tty)
+  choice=$(whiptail --clear \
+    --backtitle "$BACKTITLE" \
+    --title "$title" \
+    --checklist "$MENU" \
+    "$HEIGHT" "$WIDTH" 2 \
+    1 "Google chrome" OFF \
+    2 "AnyDesk" OFF \
+    3>&1 1>&2 2>&3)
 
-    case $choice in
-      1) install_chrome;;
-      *) break;;
+  for option in $choice
+  do
+    case $option in
+      "\"1\"")
+        install_chrome;;
+      "\"2\"")
+        install_anydesk;;
     esac
   done
 }
