@@ -64,6 +64,15 @@ function user_exists(){
 }
 
 
+function print_checklist(){
+  print_message "Chequeo inicial" """Antes de iniciar con la instalación/configuración:
+  - Asignar/reservar una ip en el repo, si la pc aún no la tiene.
+  - Conectar la pc a la red de la provincia (no adsl)
+  - Asegurate de que la ip para el 6 no esté activa en otra máquina.
+  """
+}
+
+
 function create_user(){
   readonly title="1. Creación del usuario"
 
@@ -492,8 +501,10 @@ function install_optionals_packages(){
 
 
 function sequential_mode(){
-  create_user
   configure_network
+  install_packages
+  install_optionals_packages
+  create_user
   finish_installation
 }
 
@@ -501,10 +512,10 @@ function sequential_mode(){
 function main_menu(){
   local title="Instalador/configurador"
   local options=(\
-    1 "Crear usuario"
-    2 "Configurar red"
-    3 "Instalar paquetes"
-    4 "Instalar paquetes opcionales"
+    1 "Configurar red"
+    2 "Instalar paquetes"
+    3 "Instalar paquetes opcionales"
+    4 "Crear usuario"
     5 "Terminar instalacion/configuración"
     6 "Volver"
   )
@@ -521,10 +532,10 @@ function main_menu(){
       2>&1 > /dev/tty)
 
     case "$CHOICE" in
-      1) create_user;;
-      2) configure_network;;
-      3) install_packages;;
-      4) install_optionals_packages;;
+      1) configure_network;;
+      2) install_packages;;
+      3) install_optionals_packages;;
+      4) create_user;;
       5) finish_installation;;
       *) break;;
     esac
@@ -557,6 +568,8 @@ function utils_menu(){
   done
 }
 
+
+print_checklist
 
 if [[ $# -eq 0 ]]
 then
