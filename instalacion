@@ -194,7 +194,7 @@ function set_user_network_up(){
 
 
 function configure_network() {
-  readonly title="2. Configurar red"
+  readonly title="1. Configurar red"
   print_message "$title" "Si la máquina no tiene ninguna IP asignada, ir al repo a reservar una ahora."
   while true
   do
@@ -354,7 +354,7 @@ function configure_services(){
 
 
 function install_packages(){
-  readonly title="3. Instalación de paquetes"
+  readonly title="2. Instalación de paquetes"
 
   if ! network_exists "$ADMIN_NETWORK_NAME"
   then
@@ -443,7 +443,7 @@ function set_active_network(){
 
 
 function finish_installation(){
-  readonly title="4.Finalizar instalación"
+  readonly title="4. Finalizar instalación"
 
   if ! user_ready
   then
@@ -475,7 +475,7 @@ function finish_installation(){
 
 
 function install_optionals_packages(){
-  local title="Instalar/actualizar paquetes opcionales"
+  local title="2.1 Instalar/actualizar paquetes opcionales"
   local options=(\
     1 "Google chrome"
     2 "Volver"
@@ -517,7 +517,7 @@ function main_menu(){
     3 "Instalar paquetes opcionales"
     4 "Crear usuario"
     5 "Terminar instalacion/configuración"
-    6 "Volver"
+    6 "Salir"
   )
   local size=$(( ${#options[@]} / 2))
 
