@@ -498,16 +498,15 @@ function sequential_mode(){
 }
 
 
-function installation_menu(){
+function main_menu(){
   local title="Instalador/configurador"
   local options=(\
-    1 "Iniciar instalación secuencial"
-    2 "Crear usuario"
-    3 "Configurar red"
-    4 "Instalar paquetes"
-    5 "Instalar paquetes opcionales"
-    6 "Terminar instalacion/configuración"
-    7 "Volver"
+    1 "Crear usuario"
+    2 "Configurar red"
+    3 "Instalar paquetes"
+    4 "Instalar paquetes opcionales"
+    5 "Terminar instalacion/configuración"
+    6 "Volver"
   )
   local size=$(( ${#options[@]} / 2))
 
@@ -522,12 +521,11 @@ function installation_menu(){
       2>&1 > /dev/tty)
 
     case "$CHOICE" in
-      1) sequential_mode;;
-      2) create_user;;
-      3) configure_network;;
-      4) install_packages;;
-      5) install_optionals_packages;;
-      6) finish_installation;;
+      1) create_user;;
+      2) configure_network;;
+      3) install_packages;;
+      4) install_optionals_packages;;
+      5) finish_installation;;
       *) break;;
     esac
   done
@@ -560,31 +558,15 @@ function utils_menu(){
 }
 
 
-function main_menu(){
-  local title="Instalador/configurador"
-  local options=(\
-    1 "Instalación y configuración"
-    2 "Utilidades"
-    3 "Salir"
-  )
-  local size=$(( ${#options[@]} / 2))
-
-  while true;
+if [[ $# -eq 0 ]]
+then
+  sequential_mode
+else
+  while [[ $# -gt 0 ]]
   do
-    choice=$(whiptail --clear \
-      --backtitle "$BACKTITLE" \
-      --title "$title" \
-      --menu "$MENU" \
-      "$HEIGHT" "$WIDTH" $size \
-      "${options[@]}" \
-      2>&1 > /dev/tty)
-
-    case "$choice" in
-      1) installation_menu;;
-      2) utils_menu;;
-      *) break;;
+    case $1 in
+      "-m" | "--menu")
+        main_menu;;
     esac
   done
-}
-
-main_menu
+fi
