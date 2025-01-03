@@ -39,7 +39,7 @@ readonly PACKAGES=(
     "putty" # cliente de terminal ssh/telnet integrada
     "ubuntu-mate-desktop" # entorno mate
 )
-declare admin_config_on=false
+declare admin_name="administrador"
 declare user="usuario"
 declare passwd="usuario"
 declare admin_ip
@@ -59,6 +59,22 @@ function user_exists(){
   else 
     true
   fi
+}
+
+
+function create_shortcuts(){
+  declare user_desktop
+  if [[ -d "/home/$user/Desktop" ]]
+  then
+    user_desktop="/home/$user/Desktop"
+  else
+    user_desktop="/home/$user/Escritorio"
+  fi
+
+  sudo cp /usr/share/applications/{atril,vlc,thunderbird,gimp,chrome}.desktop "$user_desktop"
+  sudo cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.desktop "$user_desktop"
+  sudo chown "$user" "$user_desktop/*.desktop"
+  sudo chmod +x "$user_desktop/*.desktop"
 }
 
 
@@ -198,16 +214,12 @@ function check_connectivity(){
 function set_admin_network_up(){
   set_proxy "$ADMIN_PROXY"
   set_network_up "$ADMIN_NETWORK_NAME"
-  admin_config_on=true
-  return 0
 }
 
 function set_user_network_up(){
   set_proxy "$SCAI_PROXY"
   set_network_up "$NETWORK_NAME"
   sudo cp ~/.config/dconf/user /home/"$user"/.config/dconf/user
-  admin_config_on=false
-  return 0
 }
 
 
@@ -305,6 +317,7 @@ Acquire::ftp::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/ap
 		nmcli connection delete "$ADMIN_NETWORK_NAME"
 	fi
 	nmcli connection add type ethernet ifname "$device" con-name "$ADMIN_NETWORK_NAME" ip4 "$admin_ip/$network_mask" gw4 "$gateway" ipv4.dns "$DNS"
+  nmcli connection modify "$ADMIN_NETWORK_NAME" connection.permissions user:"$admin_name"
 
 	if network_exists $NETWORK_NAME
 	then
@@ -372,12 +385,12 @@ function configure_services(){
 
 
 function install_packages(){
-  local title="2. Instalación de paquetes"
+  local title="Instalación de paquetes"
 
   if ! network_exists "$ADMIN_NETWORK_NAME"
   then
     print_message "$title" "Error: Ocurrió un problema al intentar actualizar el repositorio"
-    return
+    exit 1
   fi
 
   set_admin_network_up
@@ -389,49 +402,45 @@ function install_packages(){
     exit 1
   fi
 
-  found_packages=()
+  uninstalled_packages=()
   for package in "${PACKAGES[@]}"
   do
-    if apt-cache show "$package" 1>/dev/null 2>/dev/null
+    sudo apt-get install -y "$package"
+    output=$?
+    echo "Codigo de salida: $output"
+    if [[ "$output" != 0 ]]
     then
-      found_packages+=("$package")
+      uninstalled_packages+=("$package")
     fi
   done
 	
-  if ! sudo apt install "${found_packages[@]}"
+  if [[ ${#uninstalled_packages[@]} -gt 1 ]]
   then
-    exit 1
+    print_message "$title" "Los siguientes paquetes no pudieron ser instalados: ${uninstalled_packages[*]}"
+  fi
+
+  if whiptail\
+      --title "$title" \
+      --backtitle "$BACKTITLE" \
+      --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
+  then
+    create_shortcuts
   fi
 
   configure_services
-
-  if whiptail\
-    --title "$title" \
-    --backtitle "$BACKTITLE" \
-    --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
-  then
-    if [[ -d "/home/$user/Desktop" ]]
-    then
-      sudo cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Desktop/
-      sudo cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Desktop/
-    else
-      sudo cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Escritorio/
-      sudo cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Escritorio/
-    fi
-  fi
   set_user_network_up
 }
 
 
 function finish_installation(){
   local title="Finalizar instalación"
+  set_user_network_up
 
   if whiptail \
     --title "$title" \
     --backtitle "$BACKTITLE" \
     --yesno "Es necesario reiniciar el sistema para terminar la instalación.\nFinalizar y reiniciar?" "$HEIGHT" "$WIDTH"
   then
-    set_user_network_up
     sudo systemctl reboot
   fi
 }
