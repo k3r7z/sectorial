@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/bash -x
 
 readonly HEIGHT=15
 readonly WIDTH=125
@@ -63,7 +63,7 @@ function user_exists(){
 
 
 function print_checklist(){
-  print_message "Chequeo inicial" """Antes de iniciar con la instalación/configuración:
+  print_message "Antes de instalar" """Antes de iniciar con la instalación/configuración:
   - Asignar/reservar una ip en el repo, si la pc aún no la tiene.
   - Conectar la pc a la red de la provincia (no adsl)
   - Asegurate de que la ip para el 6 no esté activa en otra máquina.
@@ -72,7 +72,7 @@ function print_checklist(){
 
 
 function create_user(){
-  local title="1. Creación del usuario"
+  local title="Creación del usuario"
 
   while true
   do
@@ -138,9 +138,9 @@ function reset_fds(){
 
 function set_proxy(){
 	gsettings set org.gnome.system.proxy mode manual
-	gsettings set org.gnome.system.proxy.http port "$SCAI_PROXY_PORT"
-	gsettings set org.gnome.system.proxy.https port "$SCAI_PROXY_PORT"
-	gsettings set org.gnome.system.proxy.ftp port "$SCAI_PROXY_PORT"
+	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
 	gsettings set org.gnome.system.proxy.http host "$1"
 	gsettings set org.gnome.system.proxy.https host "$1"
 	gsettings set org.gnome.system.proxy.ftp host "$1"
@@ -167,16 +167,20 @@ function install_chrome(){
 
 function install_anydesk(){
   local title="Instalación de AnyDesk"
+  local version="6.4.0-1_amd64"
+  reset_fds
 
-  wget -O- https://keys.anydesk.com/repos/DEB-GPG-KEY | gpg --dearmor | sudo tee /etc/apt/keyrings/anydesk.gpg 1>/dev/null
-  echo "deb [signed-by=/etc/apt/keyrings/anydesk.gpg] http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk.list
+  wget https://download.anydesk.com/linux/anydesk_"$version".deb -O anydesk.deb --show-progress
 
-  sudo apt update
-  sudo apt -y install anydesk
-
-  if ! commnad -v anydesk 1>/dev/null 2>/dev/null
+  if ! sudo dpkg -i anydesk.deb
   then
-    print_message "$title" "Hubo un error al instalar anydesk"
+    sudo apt-get --fix-broken install
+    sudo dpkg -i anydesk.deb
+  fi
+
+  if [[ -e "anydesk.deb" ]]
+  then
+    rm anydesk.deb
   fi
 }
 
@@ -208,7 +212,7 @@ function set_user_network_up(){
 
 
 function configure_network() {
-  local title="1. Configurar red"
+  local title="Configurar red"
   print_message "$title" "Si la máquina no tiene ninguna IP asignada, ir al repo a reservar una ahora."
   while true
   do
@@ -382,10 +386,22 @@ function install_packages(){
 	if ! sudo apt update
   then
     print_message "$title" "Error: Ocurrió un problema al intentar actualizar el repositorio"
-    return
+    exit 1
   fi
+
+  found_packages=()
+  for package in "${PACKAGES[@]}"
+  do
+    if apt-cache show "$package" 1>/dev/null 2>/dev/null
+    then
+      found_packages+=("$package")
+    fi
+  done
 	
-  sudo apt install "${PACKAGES[@]}"
+  if ! sudo apt install "${found_packages[@]}"
+  then
+    exit 1
+  fi
 
   configure_services
 
@@ -396,11 +412,11 @@ function install_packages(){
   then
     if [[ -d "/home/$user/Desktop" ]]
     then
-      cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Desktop/
-      cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Desktop/
+      sudo cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Desktop/
+      sudo cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Desktop/
     else
-      cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Escritorio/
-      cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Escritorio/
+      sudo cp /usr/share/applications/{atril,vlc,thunderbird,gimp}.desktop /home/"$user"/Escritorio/
+      sudo cp /usr/share/applications/libreoffice-{calc,draw,impress,math,writer}.dekstop /home/"$user"/Escritorio/
     fi
   fi
   set_user_network_up
@@ -408,7 +424,7 @@ function install_packages(){
 
 
 function finish_installation(){
-  local title="4. Finalizar instalación"
+  local title="Finalizar instalación"
 
   if whiptail \
     --title "$title" \
@@ -422,7 +438,7 @@ function finish_installation(){
 
 
 function install_optionals_packages(){
-  local title="2.1 Instalar/actualizar paquetes opcionales"
+  local title="Instalar/actualizar paquetes opcionales"
   local size=$(( ${#options[@]} / 2))
 
   choice=$(whiptail --clear \
