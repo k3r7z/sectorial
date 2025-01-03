@@ -1,6 +1,5 @@
 #! /bin/bash
 
-source version
 readonly HEIGHT=15
 readonly WIDTH=125
 readonly BACKTITLE="Instalación y configuración de Linux"
@@ -45,7 +44,6 @@ declare user="usuario"
 declare passwd="usuario"
 declare admin_ip
 declare user_ip
-declare user_ready=false
 
 
 function print_message(){
@@ -74,7 +72,7 @@ function print_checklist(){
 
 
 function create_user(){
-  readonly title="1. Creación del usuario"
+  local title="1. Creación del usuario"
 
   while true
   do
@@ -115,7 +113,6 @@ function create_user(){
         break
       fi
         print_message "$title" "El usuario fue creado con éxito"
-        user_ready=true
       break
     fi
   done
@@ -211,7 +208,7 @@ function set_user_network_up(){
 
 
 function configure_network() {
-  readonly title="1. Configurar red"
+  local title="1. Configurar red"
   print_message "$title" "Si la máquina no tiene ninguna IP asignada, ir al repo a reservar una ahora."
   while true
   do
@@ -371,7 +368,7 @@ function configure_services(){
 
 
 function install_packages(){
-  readonly title="2. Instalación de paquetes"
+  local title="2. Instalación de paquetes"
 
   if ! network_exists "$ADMIN_NETWORK_NAME"
   then
@@ -389,12 +386,6 @@ function install_packages(){
   fi
 	
   sudo apt install "${PACKAGES[@]}"
-
-  if ! sudo apt upgrade
-  then
-    print_message "$title" "Error: Ocurrió un problema al intentar instalar los paquetes"
-    return
-  fi
 
   configure_services
 
@@ -416,68 +407,8 @@ function install_packages(){
 }
 
 
-function set_active_network(){
-  local title="Configurar red activa"
-
-  if [[ -z $user_ip || -z $admin_ip ]]
-  then
-    print_message "$title" "La red no está configurada"
-    return
-  fi
-
-  local options=(\
-    1 "$SCAI_PROXY / $user_ip - Red del SCAI"
-    2 "$ADMIN_PROXY / $admin_ip - Red del administrador para descargar/actualizar paquetes"
-  )
-  local size=$(( ${#options[@]} / 2))
-
-  net_config=$(whiptail \
-    --title "$title" \
-    --backtitle "$BACKTITLE" \
-    --radiolist "Elegir red" \
-    "$HEIGHT" "$WIDTH" $size \
-    "${options[@]}" \
-    2>&1 > /dev/tty)
-
-  case $net_config in
-    1) 
-      if set_user_network_up
-      then
-        print_message "$title" "Se configuró la red para el usuario"
-      else
-        print_message "$title" "Hubo un error al configurar la red del usuario"
-      fi;;
-    2)
-      if set_admin_network_up
-      then
-        print_message "$title" "Se configuró la red para el administrador"
-      else
-        print_message "$title" "Hubo un error al configurar la red del administrador"
-      fi;;
-  esac
-}
-
-
 function finish_installation(){
-  readonly title="4. Finalizar instalación"
-
-  if ! user_ready
-  then
-    print_message "$title" "El usuario aún no fue creado"
-    return
-  fi
-
-  if ! network_configured
-  then
-    print_message "$title" "La red no está configurada"
-    return
-  fi
-
-  if ! packages_installed
-  then
-    print_message "$title" "Los paquetes aún no están instalados"
-    return
-  fi
+  local title="4. Finalizar instalación"
 
   if whiptail \
     --title "$title" \
@@ -492,10 +423,6 @@ function finish_installation(){
 
 function install_optionals_packages(){
   local title="2.1 Instalar/actualizar paquetes opcionales"
-  local options=(\
-    1 "Google chrome"
-    2 "Volver"
-  )
   local size=$(( ${#options[@]} / 2))
 
   choice=$(whiptail --clear \
@@ -556,33 +483,7 @@ function main_menu(){
       3) install_optionals_packages;;
       4) create_user;;
       5) finish_installation;;
-      *) break;;
-    esac
-  done
-}
-
-
-function utils_menu(){
-  local title="Utilidades"
-  local options=(\
-    1 "Setear red activa"
-    2 "Volver"
-  )
-  local size=$(( ${#options[@]} / 2))
-
-  while true;
-  do
-    choice=$(whiptail --clear \
-      --backtitle "$BACKTITLE" \
-      --title "$title" \
-      --menu "$MENU" \
-      "$HEIGHT" "$WIDTH" $size \
-      "${options[@]}" \
-      2>&1 >/dev/tty)
-
-    case "$choice" in
-      1) set_active_network;;
-      *) break;;
+      *) exit 0;;
     esac
   done
 }
