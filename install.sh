@@ -52,6 +52,7 @@ function print_message(){
 
 
 function user_exists(){ 
+  local exists
   exists=$(grep "$1" /etc/passwd)
   if [[ -z $exists ]]
   then
@@ -63,7 +64,7 @@ function user_exists(){
 
 
 function create_shortcuts(){
-  declare user_desktop
+  local user_desktop
   if [[ -d "/home/$user/Desktop" ]]
   then
     user_desktop="/home/$user/Desktop"
@@ -82,8 +83,7 @@ function print_checklist(){
   print_message "Antes de instalar" """Antes de iniciar con la instalación/configuración:
   - Asignar/reservar una ip en el repo, si la pc aún no la tiene.
   - Conectar la pc a la red de la provincia (no adsl)
-  - Asegurate de que la ip para el 6 no esté activa en otra máquina.
-  """
+  - Asegurate de que la ip para el 6 no esté activa en otra máquina."""
 }
 
 
@@ -146,9 +146,9 @@ function network_exists(){
 
 
 function reset_fds(){
-  exec 0</dev/tty  # Reset stdin
-  exec 1>/dev/tty  # Reset stdout
-  exec 2>/dev/tty  # Reset stderr
+  exec 0</dev/tty
+  exec 1>/dev/tty
+  exec 2>/dev/tty
 }
 
 
@@ -174,9 +174,11 @@ function install_chrome(){
   sudo dpkg -i chrome.deb
   rm chrome.deb
 
-  if ! command -v google-chrome 1>/dev/null
+  if command -v google-chrome 1>/dev/null
   then
-      print_message "$title" "Ocurrió un error al intentar instalar chrome"
+    true
+  else
+    false
   fi
 }
 
@@ -197,6 +199,13 @@ function install_anydesk(){
   if [[ -e "anydesk.deb" ]]
   then
     rm anydesk.deb
+  fi
+
+  if command -v anydesk 1>/dev/null
+  then
+    true
+  else
+    false
   fi
 }
 
@@ -377,8 +386,15 @@ WantedBy=multi-user.target " | sudo tee /etc/systemd/system/x11vnc.service > /de
 }
 
 
-function configure_services(){
+function configure_cups(){
+  sudo systemctl enable cups
+  sudo systemctl start cups
   sudo systemctl enable cups-browsed
+  sudo systemctl start cups-browsed
+}
+
+function configure_services(){
+  configure_cups
   configure_vnc
   configure_samba
 }
@@ -413,20 +429,23 @@ function install_packages(){
       uninstalled_packages+=("$package")
     fi
   done
+
+  if ! install_chrome
+  then
+    uninstalled_packages+=("google chrome")
+  fi
+
+  if ! install_anydesk
+  then
+    uninstalled_packages+=("anydesk")
+  fi
 	
   if [[ ${#uninstalled_packages[@]} -gt 1 ]]
   then
     print_message "$title" "Los siguientes paquetes no pudieron ser instalados: ${uninstalled_packages[*]}"
   fi
 
-  if whiptail\
-      --title "$title" \
-      --backtitle "$BACKTITLE" \
-      --yesno "Crear accesos directos en el escritorio?" "$HEIGHT" "$WIDTH"
-  then
-    create_shortcuts
-  fi
-
+  create_shortcuts
   configure_services
   set_user_network_up
 }
@@ -474,7 +493,6 @@ function install_optionals_packages(){
 function sequential_mode(){
   configure_network
   install_packages
-  install_optionals_packages
   create_user
   finish_installation
 }
@@ -485,10 +503,9 @@ function main_menu(){
   local options=(\
     1 "Configurar red"
     2 "Instalar paquetes"
-    3 "Instalar paquetes opcionales"
-    4 "Crear usuario"
-    5 "Terminar instalacion/configuración"
-    6 "Salir"
+    3 "Crear usuario"
+    4 "Terminar instalacion/configuración"
+    5 "Salir"
   )
   local size=$(( ${#options[@]} / 2))
 
@@ -505,9 +522,8 @@ function main_menu(){
     case "$CHOICE" in
       1) configure_network;;
       2) install_packages;;
-      3) install_optionals_packages;;
-      4) create_user;;
-      5) finish_installation;;
+      3) create_user;;
+      4) finish_installation;;
       *) exit 0;;
     esac
   done
