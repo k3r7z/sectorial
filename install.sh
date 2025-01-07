@@ -501,9 +501,9 @@ function sequential_mode(){
 function main_menu(){
   local title="Instalador/configurador"
   local options=(\
-    1 "Configurar red"
-    2 "Instalar paquetes"
-    3 "Crear usuario"
+    1 "Crear usuario"
+    2 "Configurar red"
+    3 "Instalar paquetes"
     4 "Terminar instalacion/configuración"
     5 "Salir"
   )
@@ -520,9 +520,9 @@ function main_menu(){
       2>&1 > /dev/tty)
 
     case "$CHOICE" in
-      1) configure_network;;
-      2) install_packages;;
-      3) create_user;;
+      1) create_user;;
+      2) configure_network;;
+      3) install_packages;;
       4) finish_installation;;
       *) exit 0;;
     esac
