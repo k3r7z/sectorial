@@ -432,7 +432,7 @@ function install_packages(){
 
   if ! install_chrome
   then
-    uninstalled_packages+=("google chrome")
+    uninstalled_packages+=("google-chrome")
   fi
 
   if ! install_anydesk
