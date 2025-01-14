@@ -10,7 +10,6 @@ readonly PROXY_PORT="3128"
 readonly ADMIN_PROXY="10.7.6.6"
 readonly SCAI_PROXY="10.10.254.218"
 readonly NETWORK_NAME="red"
-readonly ADMIN_NETWORK_NAME="admin"
 readonly PACKAGES=(
     "x11vnc" # programa para control remoto de entornos linux
     "libreoffice" # suite de herramientas
@@ -39,7 +38,6 @@ readonly PACKAGES=(
     "putty" # cliente de terminal ssh/telnet integrada
     "ubuntu-mate-desktop" # entorno mate
 )
-declare admin_name="administrador"
 declare user="usuario"
 declare passwd="usuario"
 declare admin_ip
@@ -163,11 +161,6 @@ function set_proxy(){
 }
 
 
-function set_network_up(){
-  nmcli connection up "$1"
-}
-
-
 function install_chrome(){
   local title="Instalación de Google Chrome"
   wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
@@ -220,14 +213,10 @@ function check_connectivity(){
 }
 
 
-function set_admin_network_up(){
-  set_proxy "$ADMIN_PROXY"
-  set_network_up "$ADMIN_NETWORK_NAME"
-}
 
 function set_user_network_up(){
   set_proxy "$SCAI_PROXY"
-  set_network_up "$NETWORK_NAME"
+  nmcli connection up "$NETWORK_NAME"
   sudo cp ~/.config/dconf/user /home/"$user"/.config/dconf/user
 }
 
@@ -248,85 +237,68 @@ function configure_network() {
       "6" "Aeropuerto de Sauce Viejo - 10.8.44.0/24" OFF \
       2>&1 > /dev/tty
     )
-declare gateway;
-    declare network_mask;
-    case "$network" in
-      1) 
-        network="Ministerio"
-        gateway="10.7.6.200"
-        network_mask="23";;
-      2)
-        network="Sec. de Ciencia y Tecnología / Sec. de Transporte"
-        gateway="10.8.50.200"
-        network_mask="23";;
-      3)
-        network="Secretaría de Turismo"
-        gateway="10.10.14.200"
-        network_mask="24";;
-      4)
-        network="Terminal de Santa Fe"
-        gateway="10.7.48.200"
-        network_mask="24";;
-      5)
-        network="Enerfe Puerto de Santa Fe"
-        gateway="10.10.20.200"
-        network_mask="24";;
-      6)
-        network="Aeropuerto de Sauce Viejo"
-        gateway="10.8.44.200"
-        network_mask="24";;
-    esac
+  declare gateway;
+  declare network_mask;
+  case "$network" in
+    1) 
+      network="Ministerio"
+      gateway="10.7.6.200"
+      network_mask="23";;
+    2)
+      network="Sec. de Ciencia y Tecnología / Sec. de Transporte"
+      gateway="10.8.50.200"
+      network_mask="23";;
+    3)
+      network="Secretaría de Turismo"
+      gateway="10.10.14.200"
+      network_mask="24";;
+    4)
+      network="Terminal de Santa Fe"
+      gateway="10.7.48.200"
+      network_mask="24";;
+    5)
+      network="Enerfe Puerto de Santa Fe"
+      gateway="10.10.20.200"
+      network_mask="24";;
+    6)
+      network="Aeropuerto de Sauce Viejo"
+      gateway="10.8.44.200"
+      network_mask="24";;
+  esac
 
-    admin_ip=$(
-      whiptail \
-      --title "$title" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar una IP que tenga acceso al $ADMIN_PROXY para instalar los paquetes" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
 
-    user_ip=$(
-      whiptail \
-      --title "$title" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
+  user_ip=$(
+    whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
+    3>&2 2>&1 1>&3
+  )
 
-    device=$(
-      whiptail \
-      --title "$title" \
-      --backtitle "$BACKTITLE" \
-      --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
-      3>&2 2>&1 1>&3
-    )
+  device=$(
+    whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
+    3>&2 2>&1 1>&3
+  )
 
-    if whiptail \
-      --title "$title" \
-      --backtitle "$BACKTITLE" \
-      --yesno """
-          Red: $network
-          Gateway: $gateway
-          Mascara de subred: $network_mask
-          IP del $ADMIN_PROXY: $admin_ip
-          IP final del usuario: $user_ip
-          Disposito: $device
-          Confirmar?""" "$HEIGHT" "$WIDTH"
-        then
-      break
-    fi
+  if whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --yesno """
+        Red: $network
+        Gateway: $gateway
+        Mascara de subred: $network_mask
+        IP del $ADMIN_PROXY: $admin_ip
+        IP final del usuario: $user_ip
+        Disposito: $device
+        Confirmar?""" "$HEIGHT" "$WIDTH"
+      then
+    break
+  fi
   done
 
-	echo "Acquire::http::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
-Acquire::https::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
-Acquire::ftp::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
-
-	if network_exists $ADMIN_NETWORK_NAME
-	then
-		nmcli connection delete "$ADMIN_NETWORK_NAME"
-	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$ADMIN_NETWORK_NAME" ip4 "$admin_ip/$network_mask" gw4 "$gateway" ipv4.dns "$DNS"
-  nmcli connection modify "$ADMIN_NETWORK_NAME" connection.permissions user:"$admin_name"
 
 	if network_exists $NETWORK_NAME
 	then
@@ -400,16 +372,62 @@ function configure_services(){
 }
 
 
-function install_packages(){
-  local title="Instalación de paquetes"
+function set_apt_conf(){
+	echo "Acquire::http::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
+Acquire::https::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
+Acquire::ftp::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
+}
 
-  if ! network_exists "$ADMIN_NETWORK_NAME"
+
+function delete_network(){
+  nmcli connection delete "$1"
+}
+
+
+function create_network(){
+  local network=$1
+  local ip=$2
+  local mask=$3
+  local gateway=$4
+  local dns=$5
+  local device=$6
+
+  if network_exists
   then
-    print_message "$title" "Error: Ocurrió un problema al intentar actualizar el repositorio"
-    exit 1
+    delete_network "$1"
   fi
 
-  set_admin_network_up
+  nmcli connection add type ethernet \\
+    ifname "$device" \\
+    con-name "$network" \\
+    ip4 "$ip/$mask" \\
+    gw4 "$gateway" \\
+    ipv4.dns "$dns" 1>/dev/null 2>/dev/null
+}
+
+
+function install_packages(){
+  local title="Instalación de paquetes"
+  local network_name="apt"
+
+  admin_ip=$(
+    whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --inputbox "Ingresar una IP que tenga acceso al $ADMIN_PROXY para instalar los paquetes" "$HEIGHT" "$WIDTH" \
+    3>&2 2>&1 1>&3
+  )
+
+  device=$(
+    whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
+    3>&2 2>&1 1>&3
+  )
+
+  create_network "$network_name" "$admin_ip" "23" "10.7.6.200" "10.1.4.111,10.1.4.112" "$device"
+  set_apt_conf
   reset_fds
 
 	if ! sudo apt update
@@ -447,7 +465,7 @@ function install_packages(){
 
   create_shortcuts
   configure_services
-  set_user_network_up
+  delete_network "$network_name"
 }
 
 
