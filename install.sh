@@ -223,7 +223,15 @@ function set_user_network_up(){
 
 function configure_network() {
   local title="Configurar red"
-  print_message "$title" "Si la máquina no tiene ninguna IP asignada, ir al repo a reservar una ahora."
+
+  if ! whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Configurar red del usuario final?" "$HEIGHT" "$WIDTH"
+  then
+    return
+  fi
+
   while true
   do
     network=$(whiptail \
@@ -392,16 +400,16 @@ function create_network(){
   local dns=$5
   local device=$6
 
-  if network_exists
+  if network_exists "$network"
   then
-    delete_network "$1"
+    delete_network "$network"
   fi
 
-  nmcli connection add type ethernet \\
-    ifname "$device" \\
-    con-name "$network" \\
-    ip4 "$ip/$mask" \\
-    gw4 "$gateway" \\
+  nmcli connection add type ethernet \
+    ifname "$device" \
+    con-name "$network" \
+    ip4 "$ip/$mask" \
+    gw4 "$gateway" \
     ipv4.dns "$dns" 1>/dev/null 2>/dev/null
 }
 
