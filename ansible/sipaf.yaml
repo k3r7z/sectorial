@@ -1,0 +1,43 @@
+- name: Install sipaf modules
+  hosts: 10.7.6.11
+  vars:
+    source_url: https://app.santafe.gov.ar/soportesipaf
+    destination_path: /srv/dev-disk-by-uuid-1e79eb04-27ed-41b9-8872-c7cb37d2cb76/informatica/SIPAF/
+    urls: []
+    modules: [
+      'libcom',
+      'confbd',
+      'responeje',
+      'recpreeje',
+      'progeje',
+      'modifeje',
+      'formeje',
+      'ejereceje',
+      'ejegaseje',
+      'sumieje',
+      'contaeje',
+      'delegfiscaleje',
+      'admbaneje',
+      'consultaseje',
+      'benefeje',
+      'admusr'
+      ]
+
+  tasks:
+    - name: get html content
+      uri:
+        url: "{{ source_url }}/modulos_cont.html"
+        return_content: yes
+      register: html
+
+    - name: get modules url from html
+      set_fact:
+        urls: "{{ urls + [html.content | regex_search('archivos/' ~ item ~ '.*zip')] }}"
+      loop: "{{ modules }}"
+
+    - name: download and extract modules
+      unarchive:
+        src: "{{ source_url }}/{{ item }}"
+        dest: "{{ destination_path }}"
+        remote_src: yes
+      loop: "{{ urls }}"
