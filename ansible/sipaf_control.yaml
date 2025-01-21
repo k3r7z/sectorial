@@ -1,5 +1,5 @@
-- name: Install sipaf modules
-  hosts: 10.7.6.11
+- name: Download modules on server side
+  hosts: clients
   vars:
     source_url: https://app.santafe.gov.ar/soportesipaf
     destination_path: /srv/dev-disk-by-uuid-1e79eb04-27ed-41b9-8872-c7cb37d2cb76/informatica/SIPAF/

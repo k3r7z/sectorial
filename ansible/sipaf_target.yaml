@@ -1,0 +1,13 @@
+- name: Install modules on client side
+  hosts: sipaf_users
+  vars:
+    install_dir: /home/usuario/SIPAF
+
+  tasks:
+    - name: copy modules to client side
+      copy:
+        src: /srv/dev-disk-by-uuid-1e79eb04-27ed-41b9-8872-c7cb37d2cb76/informatica/SIPAF/
+        dest: "{{ install_dir }}"
+
+    - name: install modules
+      shell: "wine {{ install_dir }}/* /S /SO=l"
