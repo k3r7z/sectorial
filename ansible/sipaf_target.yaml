@@ -9,5 +9,12 @@
         src: /srv/dev-disk-by-uuid-1e79eb04-27ed-41b9-8872-c7cb37d2cb76/informatica/SIPAF/
         dest: "{{ install_dir }}"
 
+    - name: find all .exe installers
+      find:
+        paths: "{{ install_dir }}"
+        patterns: "*.exe"
+      register: modules
+
     - name: install modules
-      shell: "wine {{ install_dir }}/* /S /SO=l"
+      shell: "wine {{ item.path }} /S /SO=l"
+      loop: "{{ modules.files }}"
