@@ -18,3 +18,8 @@
     - name: install modules
       shell: "wine {{ item.path }} /S /SO=l"
       loop: "{{ modules.files }}"
+
+    - name: remove installers
+      file:
+        path: "{{ install_dir }}"
+        state: absent
