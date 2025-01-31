@@ -1,8 +1,8 @@
-#! /bin/bash -x
+#! /bin/bash
 
 readonly HEIGHT=15
-readonly WIDTH=125
-readonly BACKTITLE="Instalación y configuración de Linux"
+readonly WIDTH=100
+readonly BACKTITLE="Instalación de Linux"
 readonly SCAN_DIR=/home/usuario/scan
 readonly SHARE_DIR=/home/usuario/compartida
 readonly DNS='10.1.4.111,10.1.4.112'
@@ -11,12 +11,16 @@ readonly ADMIN_PROXY="10.7.6.6"
 readonly SCAI_PROXY="10.10.254.218"
 readonly NETWORK_NAME="red"
 readonly PACKAGES=(
+    "lsb" # Linux standard base
     "x11vnc" # programa para control remoto de entornos linux
     "libreoffice" # suite de herramientas
-    "ssh" # protocolo para control remoto de terminales
+    "ssh"
+    "openssh-server" # protocolo para control remoto de terminales
     "unrar" #para rars
     "unzip" # para zips
     "vlc" # reproductor de audio y videos
+    "mc"
+    "myspell-es"
     "thunderbird" # correo
     "thunderbird-locale-es" # en castellano
     "myspell-es" # correcion en castellano para libreoffice
@@ -24,19 +28,36 @@ readonly PACKAGES=(
     "firefox-locale-es" # traducción de firefox
     "ntp" # Protocolo para la sincronizacion del reloj
     "hplip"
+    "x3270" # El SIE
     "hplip-gui" # drivers para impresoras HP
-    "vim" # editor de texto
-    "neovim" # fork de vim mejorado
     "gimp" # editor de imagenes
     "inkscape" # editor de imagenes vectorial
-    "neovim" # el mejor editor
+    "neovim" # editor de texto
     "wine" # interfaz para windows
     "ocsinventory-agent" # programa para gestión de inventario
     "cifs-utils" # utilidades para el protocolo cifs
     "net-tools" # utilidades de red
     "ethtool" # utilidad para controlar los drivers de red y hardware
     "putty" # cliente de terminal ssh/telnet integrada
+    "ubuntu-restricted-extras"
     "ubuntu-mate-desktop" # entorno mate
+    "samba" # protocolo para comparticion de archivos
+    "caja-share" #?
+    "gnome-panel" #?
+    "net-tools" #?
+    "dconf-editor" #editor para el dconf
+    "ethtool" #?
+    "nast" #?
+    "ntp" #?
+    "pidgin" #?
+    "pidgin-otr" #?
+    "putty" #?
+    "scribus" #?
+    "scribus-doc" #?
+    "system-config-printer-gnome" #?
+    "yad" #?
+    "google-chrome-stable" # Google chrome
+    "anydesk"
 )
 declare user="usuario"
 declare passwd="usuario"
@@ -78,10 +99,11 @@ function create_shortcuts(){
 
 
 function print_checklist(){
-  print_message "Antes de instalar" """Antes de iniciar con la instalación/configuración:
+  print_message "Antes de instalar" """
+  - Conectar la pc a la red de la provincia (no adsl).
+  - Asegurate de que la ip para el 6 no esté duplicada.
   - Asignar/reservar una ip en el repo, si la pc aún no la tiene.
-  - Conectar la pc a la red de la provincia (no adsl)
-  - Asegurate de que la ip para el 6 no esté activa en otra máquina."""
+    Si la pc todavía no tiene destino, saltear la configuracion de ip del usuario."""
 }
 
 
@@ -155,51 +177,37 @@ function set_proxy(){
 	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
 	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
 	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.http host "$1"
-	gsettings set org.gnome.system.proxy.https host "$1"
-	gsettings set org.gnome.system.proxy.ftp host "$1"
+	gsettings set org.gnome.system.proxy.http host "$SCAI_PROXY"
+	gsettings set org.gnome.system.proxy.https host "$SCAI_PROXY"
+	gsettings set org.gnome.system.proxy.ftp host "$SCAI_PROXY"
+  sudo cp ~/.config/dconf/user /home/"$user"/.config/dconf/user
+
+	gsettings set org.gnome.system.proxy mode manual
+	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
+	gsettings set org.gnome.system.proxy.http host "$ADMIN_PROXY"
+	gsettings set org.gnome.system.proxy.https host "$ADMIN_PROXY"
+	gsettings set org.gnome.system.proxy.ftp host "$ADMIN_PROXY"
 }
 
 
-function install_chrome(){
-  local title="Instalación de Google Chrome"
-  wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-  sudo dpkg -i chrome.deb
-  rm chrome.deb
-
-  if command -v google-chrome 1>/dev/null
-  then
-    true
-  else
-    false
-  fi
+function add_chrome_key(){
+  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
 }
 
 
-function install_anydesk(){
-  local title="Instalación de AnyDesk"
-  local version="6.4.0-1_amd64"
-  reset_fds
+function add_anydesk_key(){
+  wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY | sudo apt-key add -
+  echo "deb http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk-stable.list
+}
 
-  wget https://download.anydesk.com/linux/anydesk_"$version".deb -O anydesk.deb --show-progress
 
-  if ! sudo dpkg -i anydesk.deb
-  then
-    sudo apt-get --fix-broken install
-    sudo dpkg -i anydesk.deb
-  fi
-
-  if [[ -e "anydesk.deb" ]]
-  then
-    rm anydesk.deb
-  fi
-
-  if command -v anydesk 1>/dev/null
-  then
-    true
-  else
-    false
-  fi
+function add_external_packages(){
+  add_chrome_key
+  add_anydesk_key
+  add_adobe_key
 }
 
 
@@ -213,23 +221,81 @@ function check_connectivity(){
 }
 
 
+function create_network_connection(){
+  local network=$1
+  local ip=$2
+  local mask=$3
+  local gateway=$4
+  local dns=$5
+  local device=$6
+  local set_up=$7
 
-function set_user_network_up(){
-  set_proxy "$SCAI_PROXY"
-  nmcli connection up "$NETWORK_NAME"
-  sudo cp ~/.config/dconf/user /home/"$user"/.config/dconf/user
+  if network_exists "$network"
+  then
+    delete_network "$network"
+  fi
+
+  nmcli connection add type ethernet \
+    ifname "$device" \
+    con-name "$network" \
+    ip4 "$ip/$mask" \
+    gw4 "$gateway" \
+    ipv4.dns "$dns" 1>/dev/null 2>/dev/null
+
+  if [[ $set_up == true ]]
+  then
+    nmcli connection up "$network"
+  fi
 }
 
 
-function configure_network() {
-  local title="Configurar red"
+function set_admin_network_connection(){
+  local title="Configurar red del administrador"
+  local admin_connection="admin"
 
-  if ! whiptail \
+  while true;
+  do
+  admin_ip=$(
+    whiptail \
     --title "$title" \
     --backtitle "$BACKTITLE" \
-    --yesno "Configurar red del usuario final?" "$HEIGHT" "$WIDTH"
+    --inputbox "Ingresar una IP con acceso al $ADMIN_PROXY" "$HEIGHT" "$WIDTH" \
+    3>&2 2>&1 1>&3
+  )
+
+  device=$(
+    whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
+    3>&2 2>&1 1>&3
+  )
+
+  if whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --yesno """
+        IP: $admin_ip
+        Disposito: $device
+        Confirmar?""" "$HEIGHT" "$WIDTH"
+      then
+    break
+  fi
+  done
+
+  create_network_connection "$admin_connection" "$admin_ip" "23" "10.7.6.200" "10.1.4.111,10.1.4.112" "$device" true
+}
+
+
+function set_user_network_connection() {
+  local title="Configurar red del usuario"
+
+  if whiptail \
+    --title "$title" \
+    --backtitle "$BACKTITLE" \
+    --yesno "Saltear?" "$HEIGHT" "$WIDTH"
   then
-    return
+    return 0
   fi
 
   while true
@@ -274,12 +340,11 @@ function configure_network() {
       network_mask="24";;
   esac
 
-
   user_ip=$(
     whiptail \
     --title "$title" \
     --backtitle "$BACKTITLE" \
-    --inputbox "Ingresar la IP final del usuario" "$HEIGHT" "$WIDTH" \
+    --inputbox "Ingresar IP" "$HEIGHT" "$WIDTH" \
     3>&2 2>&1 1>&3
   )
 
@@ -298,7 +363,6 @@ function configure_network() {
         Red: $network
         Gateway: $gateway
         Mascara de subred: $network_mask
-        IP del $ADMIN_PROXY: $admin_ip
         IP final del usuario: $user_ip
         Disposito: $device
         Confirmar?""" "$HEIGHT" "$WIDTH"
@@ -307,14 +371,37 @@ function configure_network() {
   fi
   done
 
-
-	if network_exists $NETWORK_NAME
-	then
-		nmcli connection delete "$NETWORK_NAME"
-	fi
-	nmcli connection add type ethernet ifname "$device" con-name "$NETWORK_NAME" ip4 "$user_ip/$network_mask" gw4 "$gateway" ipv4.dns "$DNS"
+  create_network_connection "$NETWORK_NAME" "$user_ip" "$network_mask" "$gateway" "$DNS" "$device" false
+  return 0
 }
 
+
+function configure_network(){
+  local title="Configuración de red"
+  local options=(\
+    1 "Configurar conexión del administrador"
+    2 "Configurar conexión del usuario"
+    3 "Salir"
+  )
+  local size=$(( ${#options[@]} / 2))
+
+  while true;
+  do
+    CHOICE=$(whiptail --clear \
+      --backtitle "$BACKTITLE" \
+      --title "$title" \
+      --menu "$MENU" \
+      "$HEIGHT" "$WIDTH" $size \
+      "${options[@]}" \
+      2>&1 > /dev/tty)
+
+    case "$CHOICE" in
+      1) set_admin_network_connection;;
+      2) set_user_network_connection;;
+      *) return 0;;
+    esac
+  done
+}
 
 function configure_samba(){
 	if [[ ! -d $SCAN_DIR ]]
@@ -383,7 +470,7 @@ function configure_services(){
 function set_apt_conf(){
 	echo "Acquire::http::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
 Acquire::https::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
-Acquire::ftp::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf > /dev/null
+Acquire::ftp::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf 1>/dev/null
 }
 
 
@@ -392,56 +479,16 @@ function delete_network(){
 }
 
 
-function create_network(){
-  local network=$1
-  local ip=$2
-  local mask=$3
-  local gateway=$4
-  local dns=$5
-  local device=$6
-
-  if network_exists "$network"
-  then
-    delete_network "$network"
-  fi
-
-  nmcli connection add type ethernet \
-    ifname "$device" \
-    con-name "$network" \
-    ip4 "$ip/$mask" \
-    gw4 "$gateway" \
-    ipv4.dns "$dns" 1>/dev/null 2>/dev/null
-}
-
-
 function install_packages(){
   local title="Instalación de paquetes"
-  local network_name="apt"
 
-  admin_ip=$(
-    whiptail \
-    --title "$title" \
-    --backtitle "$BACKTITLE" \
-    --inputbox "Ingresar una IP que tenga acceso al $ADMIN_PROXY para instalar los paquetes" "$HEIGHT" "$WIDTH" \
-    3>&2 2>&1 1>&3
-  )
-
-  device=$(
-    whiptail \
-    --title "$title" \
-    --backtitle "$BACKTITLE" \
-    --inputbox "Ingresar el dispositivo de red\n$(nmcli device | grep ethernet)" "$HEIGHT" "$WIDTH" \
-    3>&2 2>&1 1>&3
-  )
-
-  create_network "$network_name" "$admin_ip" "23" "10.7.6.200" "10.1.4.111,10.1.4.112" "$device"
-  set_apt_conf
   reset_fds
+  add_external_packages
 
 	if ! sudo apt update
   then
     print_message "$title" "Error: Ocurrió un problema al intentar actualizar el repositorio"
-    exit 1
+    #exit 1
   fi
 
   uninstalled_packages=()
@@ -473,7 +520,6 @@ function install_packages(){
 
   create_shortcuts
   configure_services
-  delete_network "$network_name"
 }
 
 
@@ -491,82 +537,12 @@ function finish_installation(){
 }
 
 
-function install_optionals_packages(){
-  local title="Instalar/actualizar paquetes opcionales"
-  local size=$(( ${#options[@]} / 2))
-
-  choice=$(whiptail --clear \
-    --backtitle "$BACKTITLE" \
-    --title "$title" \
-    --checklist "$MENU" \
-    "$HEIGHT" "$WIDTH" 2 \
-    1 "Google chrome" OFF \
-    2 "AnyDesk" OFF \
-    3>&1 1>&2 2>&3)
-
-  for option in $choice
-  do
-    case $option in
-      "\"1\"")
-        install_chrome;;
-      "\"2\"")
-        install_anydesk;;
-    esac
-  done
-}
-
-
-function sequential_mode(){
-  configure_network
-  install_packages
-  create_user
-  finish_installation
-}
-
-
-function main_menu(){
-  local title="Instalador/configurador"
-  local options=(\
-    1 "Crear usuario"
-    2 "Configurar red"
-    3 "Instalar paquetes"
-    4 "Terminar instalacion/configuración"
-    5 "Salir"
-  )
-  local size=$(( ${#options[@]} / 2))
-
-  while true;
-  do
-    CHOICE=$(whiptail --clear \
-      --backtitle "$BACKTITLE" \
-      --title "$title" \
-      --menu "$MENU" \
-      "$HEIGHT" "$WIDTH" $size \
-      "${options[@]}" \
-      2>&1 > /dev/tty)
-
-    case "$CHOICE" in
-      1) create_user;;
-      2) configure_network;;
-      3) install_packages;;
-      4) finish_installation;;
-      *) exit 0;;
-    esac
-  done
-}
-
-
-print_checklist
-
-if [[ $# -eq 0 ]]
-then
-  sequential_mode
-else
-  while [[ $# -gt 0 ]]
-  do
-    case $1 in
-      "-m" | "--menu")
-        main_menu;;
-    esac
-  done
-fi
+# La instalación se ejecuta en el siguiente orden
+print_checklist                 # ayuda memoria
+create_user                     # creacion del usuario
+set_user_network_connection     # ip final para el usuario, si la hay
+set_admin_network_connection    # para la instalacion de paquetes
+set_apt_conf                    # seteo del proxy para el apt
+set_proxy                       # seteo del proxy para el usuario
+install_packages                # instalacion de los paquetes
+finish_installation             # finalizacion de la instalacion
