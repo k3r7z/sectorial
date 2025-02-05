@@ -1,0 +1,30 @@
+#! /bin/bash -x
+readonly HEIGHT=15 WIDTH=100 BACKTITLE="Notificaciones"
+
+title=$(
+  whiptail \
+    --title "$BACKTITLE" \
+    --backtitle "$BACKTITLE" \
+    --inputbox "Título" "$HEIGHT" "$WIDTH" \
+    3>&1 1>&2 2>&3)
+
+content=$(
+  whiptail \
+    --title "$BACKTITLE" \
+    --backtitle "$BACKTITLE" \
+    --inputbox "Contenido" "$HEIGHT" "$WIDTH" \
+    3>&1 1>&2 2>&3)
+
+sector=$(
+  whiptail \
+    --title "$BACKTITLE" \
+    --checklist "Seleccionar sector" "$HEIGHT" "$WIDTH" 5 \
+    "Todos" "" OFF \
+    "Cooperativas" "" OFF \
+    "Industria" "" OFF \
+    "DGA" "" OFF \
+    "Turismo" "" OFF \
+    2>&1 > /dev/tty)
+
+ssh administrador@10.7.6.11 \
+  "ansible-playbook -i hosts --user usuario --ask-pass popup.yaml -e 'title=\"${title}\" content=\"${content}\"'"

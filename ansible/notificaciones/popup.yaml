@@ -1,0 +1,5 @@
+- name: Notify targets
+  hosts: 10.7.6.92
+  tasks:
+    - name: popup
+      command: notify-send "Hallo Welt"
