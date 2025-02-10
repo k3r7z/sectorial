@@ -1,0 +1,80 @@
+#! /bin/bash
+
+readonly PROXY_PORT="3128"
+readonly ADMIN_PROXY="10.7.6.6"
+readonly SCAI_PROXY="10.10.254.218"
+
+
+function configure_vnc(){
+  echo "[Unit]
+Description=x11vnc service
+After=display-manager.service network.target syslog.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/x11vnc -forever -display :0 -auth guess -passwd 3e2w1q
+ExecStop=/usr/bin/killall x11vnc
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target " | sudo tee /etc/systemd/system/x11vnc.service 1>/dev/null
+	sudo systemctl enable --now x11vnc
+}
+
+
+
+function create_network_connection(){ local network=$1
+  local ip=$2
+  local mask=$3
+  local gateway=$4
+  local dns=$5
+  local device=$6
+  local set_up=$7
+
+  if network_exists "$network"
+  then
+    delete_network "$network"
+  fi
+
+  nmcli connection add type ethernet \
+    ifname "$device" \
+    con-name "$network" \
+    ip4 "$ip/$mask" \
+    gw4 "$gateway" \
+    ipv4.dns "$dns"
+
+  if [[ $set_up == true ]]
+  then
+    nmcli connection up "$network"
+  fi
+}
+
+readonly PROXY_PORT="3128"
+readonly ADMIN_PROXY="10.7.6.6"
+readonly IP="10.7.6.92"
+
+gsettings set org.gnome.system.proxy mode manual
+gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
+gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
+gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
+gsettings set org.gnome.system.proxy.http host "$ADMIN_PROXY"
+gsettings set org.gnome.system.proxy.https host "$ADMIN_PROXY"
+gsettings set org.gnome.system.proxy.ftp host "$ADMIN_PROXY"
+
+
+nmcli device
+read -p "Dispositivo: " device
+echo "$device"
+
+create_network_connection "admin" "$IP" "23" "10.7.6.200" "10.1.4.111,10.1.4.112" "$device" true
+
+sudo apt update
+sudo apt install -y openssh-server ocsinventory-agent x11vnc
+
+configure_vnc
+
+sudo systemctl enable ocsinventory-agent
+sudo systemctl start ocsinventory-agent
+
+gsettings set org.gnome.system.proxy.http host "$SCAI_PROXY"
+gsettings set org.gnome.system.proxy.https host "$SCAI_PROXY"
+gsettings set org.gnome.system.proxy.ftp host "$SCAI_PROXY"
+nmcli connection delete "admin"

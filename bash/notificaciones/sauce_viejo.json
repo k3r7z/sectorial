@@ -1,1 +1,0 @@
-{"@context":"\/repo\/api\/contexts\/Error","@type":"hydra:Error","hydra:title":"An error occurred","hydra:description":"App\\Entity\\Reporte object not found by the @ParamConverter annotation."}

@@ -1,107 +1,23 @@
 - name: Get inventory from repo
   hosts: localhost
   gather_facts: no
-  vars:
-    REPO_LOGIN: https://www.santafe.gob.ar/repo/login
-    REPO_URL: https://www.santafe.gob.ar/repo/reporte/jsondatareporte/1
-
   tasks: 
-    - name: Fetch login page to get CSRF token
-      uri:
-        url: "{{ REPO_LOGIN }}"
-        method: GET
-        return_content: yes
-      register: login_page
+    - name: download reports
+      ansible.builtin.shell: ./download-reports.sh
 
-    - name: get html response
-      copy:
-        content: "{{ login_page.content }}"
-        dest: ./token_page.html
-
-    - name: Extract CSRF token
+    - name: parse data
       vars:
-        regex_query: "token.*\n.*value=\"(?P<token>.*)\""
-      set_fact:
-        csrf_get: "{{ (login_page.content | regex_search(regex_query, '\\g<token>'))[0] | urlencode }}"
-
-    - name: show csrf token
-      debug:
-        var: csrf_get
-        
-    - name: Login
-      uri:
-        url: "{{ REPO_LOGIN }}"
-        method: POST
-        body_format: form-urlencoded
-        body:
-          username: "administrador@santafe.gov.ar"
-          password: "3e2w1q"
-          _csrf_token: "{{ csrf_get }}"
-        headers:
-          Cookie: "{{ login_page.cookies_string }}"
-        return_content: true
-        follow_redirects: all
-      register: login
-
-    - name: Extract CSRF token
-      vars:
-        regex_query: "token.*\n.*value=\"(?P<token>.*)\""
-      set_fact:
-        csrf_post: "{{ (login.content | regex_search(regex_query, '\\g<token>'))[0] }}"
-
-    - name: show csrf token
-      debug:
-        var: csrf_post
-
-    - name: get html response
-      copy:
-        content: "{{ login.content }}"
-        dest: ./login_response.html
-
-    #- name: show cookies
-    #  debug:
-    #    var: login.cookies
-
-    #- name: get JSON
-    #  uri:
-    #    url: "{{ REPO_URL }}"
-    #    method: GET
-    #    return_content: true
-    #    headers:
-    #      #Cookie: "PHPSESSID={{ login.cookies.PHPSESSID }}; REPOpwww={{ login.cookies.REPOpwww }}"
-    #      Cookie: "{{ login.cookies_string }}"
-    #  register: json_response
-
-    #- name: show JSON
-    #  debug:
-    #    var: json_response.content
-
-
-    #- name: convert json
-    #  set_fact:
-    #    ministerio: "{{ lookup('file', './ministerio.json') | from_json }}"
-
-    #- name: get users from json
-    #  vars:
-    #    user_query: "[?TIPO=='USUARIO']"
-    #  set_fact:
-    #    users: "{{ ministerio.data | json_query(user_query)}}"
-
-    #- name: set facts
-    #  set_fact:
-    #    sectors: "{{ users | json_query('[].SECTOR') | unique }}"
-    #    ips: "{{ users | json_query('[].IP') }}"
-
-    #- name: generate inventory.yaml
-    #  copy:
-    #    content: |
-    #      all:
-    #        children:
-    #      {% for sector in sectors %}
-    #          {{ sector }}:
-    #            hosts:
-    #      {% for user in users if user.SECTOR == sector %}
-    #              {{ user.IP }}: # {{ user.SECTOR }} - {{ user.NOMBRE }}
-    #      {% endfor %}
-    #      {% endfor %}
-    #    dest: "./ministerio.yaml"
+        networks: "{{ (lookup('file', 'networks.json') | from_json).data }}"
+        users: "{{ (lookup('file', 'users.json') | from_json).data }}"
+      ansible.builtin.copy:
+        dest: inventory/inventory.yaml
+        content: |
+          all:
+            children:
+          {% for network in networks %}
+              {{ network.name }}:
+                hosts:
+          {% for user in users if user.network_id == network.id %}
+                  {{ user.ip }}: # {{ user.nombre }}
+          {% endfor %}
+          {% endfor %}
