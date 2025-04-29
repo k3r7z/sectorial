@@ -1,8 +1,5 @@
 #! /bin/bash
 
-readonly PROXY_PORT="3128"
-readonly ADMIN_PROXY="10.7.6.6"
-readonly SCAI_PROXY="10.10.254.218"
 
 
 function configure_vnc(){
@@ -49,6 +46,7 @@ function create_network_connection(){ local network=$1
 
 readonly PROXY_PORT="3128"
 readonly ADMIN_PROXY="10.7.6.6"
+readonly SCAI_PROXY="10.10.254.218"
 readonly IP="10.7.6.92"
 
 gsettings set org.gnome.system.proxy mode manual

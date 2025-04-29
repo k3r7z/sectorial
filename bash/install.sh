@@ -7,7 +7,6 @@ readonly SCAN_DIR=/home/usuario/scan
 readonly SHARE_DIR=/home/usuario/compartida
 readonly DNS='10.1.4.111,10.1.4.112'
 readonly PROXY_PORT="3128"
-readonly ADMIN_PROXY="10.7.6.6"
 readonly SCAI_PROXY="10.10.254.218"
 readonly NETWORK_NAME="red"
 readonly PACKAGES=(
@@ -70,14 +69,12 @@ function print_message(){
 }
 
 
-function user_exists(){ 
-  local exists
-  exists=$(grep "$1" /etc/passwd)
-  if [[ -z $exists ]]
+function user_exists(){
+  if id "$1" 1>/dev/null 2>/dev/null
   then
-    false
-  else 
     true
+  else
+    false
   fi
 }
 
@@ -98,17 +95,13 @@ function create_shortcuts(){
 }
 
 
-function print_checklist(){
-  print_message "Antes de instalar" """
-  - Conectar la pc a la red de la provincia (no adsl).
-  - Asegurate de que la ip para el 6 no esté duplicada.
-  - Asignar/reservar una ip en el repo, si la pc aún no la tiene.
-    Si la pc todavía no tiene destino, saltear la configuracion de ip del usuario."""
-}
-
-
 function create_user(){
   local title="Creación del usuario"
+
+  if user_exists "$user"
+  then
+    return 0
+  fi
 
   while true
   do
@@ -172,6 +165,13 @@ function reset_fds(){
 }
 
 
+function set_apt_conf(){
+	echo "Acquire::http::proxy \"http://$SCAI_PROXY:$PROXY_PORT\";
+Acquire::https::proxy \"http://$SCAI_PROXY:$PROXY_PORT\";
+Acquire::ftp::proxy \"http://$SCAI_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf 1>/dev/null
+  return 0
+}
+
 function set_proxy(){
 	gsettings set org.gnome.system.proxy mode manual
 	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
@@ -180,15 +180,9 @@ function set_proxy(){
 	gsettings set org.gnome.system.proxy.http host "$SCAI_PROXY"
 	gsettings set org.gnome.system.proxy.https host "$SCAI_PROXY"
 	gsettings set org.gnome.system.proxy.ftp host "$SCAI_PROXY"
-  sudo cp ~/.config/dconf/user /home/"$user"/.config/dconf/user
-
-	gsettings set org.gnome.system.proxy mode manual
-	gsettings set org.gnome.system.proxy.http port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.https port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.ftp port "$PROXY_PORT"
-	gsettings set org.gnome.system.proxy.http host "$ADMIN_PROXY"
-	gsettings set org.gnome.system.proxy.https host "$ADMIN_PROXY"
-	gsettings set org.gnome.system.proxy.ftp host "$ADMIN_PROXY"
+	sudo cp ~/.config/dconf/user /home/"$user"/.config/dconf/user
+  set_apt_conf
+  return 0
 }
 
 
@@ -249,8 +243,8 @@ function create_network_connection(){
 }
 
 
-function set_admin_network_connection(){
-  local title="Configurar red del administrador"
+function set_admin_network(){
+  local title="Configurar red para la instalación"
   local admin_connection="admin"
 
   while true;
@@ -259,7 +253,7 @@ function set_admin_network_connection(){
     whiptail \
     --title "$title" \
     --backtitle "$BACKTITLE" \
-    --inputbox "Ingresar una IP con acceso al $ADMIN_PROXY" "$HEIGHT" "$WIDTH" \
+    --inputbox "Ingresar IP" "$HEIGHT" "$WIDTH" \
     3>&2 2>&1 1>&3
   )
 
@@ -283,20 +277,12 @@ function set_admin_network_connection(){
   fi
   done
 
-  create_network_connection "$admin_connection" "$admin_ip" "23" "10.7.6.200" "10.1.4.111,10.1.4.112" "$device" true
+  create_network_connection "$admin_connection" "$admin_ip" "23" "10.7.6.200" "$DNS" "$device" true
 }
 
 
-function set_user_network_connection() {
+function set_user_network() {
   local title="Configurar red del usuario"
-
-  if whiptail \
-    --title "$title" \
-    --backtitle "$BACKTITLE" \
-    --yesno "Saltear?" "$HEIGHT" "$WIDTH"
-  then
-    return 0
-  fi
 
   while true
   do
@@ -376,33 +362,6 @@ function set_user_network_connection() {
 }
 
 
-function configure_network(){
-  local title="Configuración de red"
-  local options=(\
-    1 "Configurar conexión del administrador"
-    2 "Configurar conexión del usuario"
-    3 "Salir"
-  )
-  local size=$(( ${#options[@]} / 2))
-
-  while true;
-  do
-    CHOICE=$(whiptail --clear \
-      --backtitle "$BACKTITLE" \
-      --title "$title" \
-      --menu "$MENU" \
-      "$HEIGHT" "$WIDTH" $size \
-      "${options[@]}" \
-      2>&1 > /dev/tty)
-
-    case "$CHOICE" in
-      1) set_admin_network_connection;;
-      2) set_user_network_connection;;
-      *) return 0;;
-    esac
-  done
-}
-
 function configure_samba(){
 	if [[ ! -d $SCAN_DIR ]]
 	then
@@ -411,6 +370,7 @@ function configure_samba(){
 		sudo chmod 777 $SCAN_DIR
 		echo "[scan]
 		path = $SCAN_DIR
+		force user = usuario
 		public = yes
 		writable = yes
 		browseable = yes
@@ -460,6 +420,7 @@ function configure_cups(){
   sudo systemctl start cups-browsed
 }
 
+
 function configure_services(){
   configure_cups
   configure_vnc
@@ -467,15 +428,9 @@ function configure_services(){
 }
 
 
-function set_apt_conf(){
-	echo "Acquire::http::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
-Acquire::https::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";
-Acquire::ftp::proxy \"http://$ADMIN_PROXY:$PROXY_PORT\";" | sudo tee /etc/apt/apt.conf 1>/dev/null
-}
-
-
 function delete_network(){
   nmcli connection delete "$1"
+  return 0
 }
 
 
@@ -538,11 +493,9 @@ function finish_installation(){
 
 
 # La instalación se ejecuta en el siguiente orden
-print_checklist                 # ayuda memoria
 create_user                     # creacion del usuario
-set_user_network_connection     # ip final para el usuario, si la hay
+set_proxy                       # seteo del proxy
 set_admin_network_connection    # para la instalacion de paquetes
-set_apt_conf                    # seteo del proxy para el apt
-set_proxy                       # seteo del proxy para el usuario
 install_packages                # instalacion de los paquetes
+set_user_network_connection     # ip final para el usuario, si la hay
 finish_installation             # finalizacion de la instalacion
